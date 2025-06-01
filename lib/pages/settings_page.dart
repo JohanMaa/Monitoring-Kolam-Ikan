@@ -21,8 +21,7 @@ class SettingsPageState extends State<SettingsPage> {
   final List<String> sensorNames = [
     'suhu',
     'ph',
-    'kekeruhan',
-    'dissolved_oxygen',
+    'do',
     'berat',
     'tinggi_air'
   ];
@@ -37,12 +36,11 @@ class SettingsPageState extends State<SettingsPage> {
 
   Future<void> _loadAllThresholds() async {
     final savedThresholds = await SettingsService.getThresholds();
+    thresholds = savedThresholds;
 
     for (var sensor in sensorNames) {
       final saved = savedThresholds[sensor];
       final th = saved ?? defaultThresholds[sensor]!;
-
-      thresholds[sensor] = th;
 
       controllers['$sensor-normalMin'] =
           TextEditingController(text: th.normalMin.toString());
@@ -60,6 +58,7 @@ class SettingsPageState extends State<SettingsPage> {
   }
 
   Future<void> _saveThresholds() async {
+    final newThresholds = <String, SensorThreshold>{};
     for (var sensor in sensorNames) {
       final newThreshold = SensorThreshold(
         normalMin: double.tryParse(controllers['$sensor-normalMin']!.text) ?? 0.0,
@@ -67,8 +66,10 @@ class SettingsPageState extends State<SettingsPage> {
         criticalMin: double.tryParse(controllers['$sensor-criticalMin']!.text) ?? 0.0,
         criticalMax: double.tryParse(controllers['$sensor-criticalMax']!.text) ?? 0.0,
       );
+      newThresholds[sensor] = newThreshold;
       await SettingsService.saveThreshold(sensor, newThreshold);
     }
+    thresholds = newThresholds;
 
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -90,7 +91,7 @@ class SettingsPageState extends State<SettingsPage> {
   Widget _buildThresholdInput(String sensor) {
     return Card(
       elevation: 4,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)), // Hapus const
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
       margin: const EdgeInsets.symmetric(vertical: 10, horizontal: 8),
       child: Padding(
         padding: const EdgeInsets.all(16),
@@ -156,7 +157,7 @@ class SettingsPageState extends State<SettingsPage> {
       controller: controllers['$sensor-$key'],
       decoration: InputDecoration(
         labelText: label,
-        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)), // Hapus const
+        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
       ),
       keyboardType: const TextInputType.numberWithOptions(decimal: true),
       inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'[0-9.]'))],
@@ -187,7 +188,7 @@ class SettingsPageState extends State<SettingsPage> {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)), // Hapus const
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         title: Text(name),
         content: Column(
           mainAxisSize: MainAxisSize.min,
@@ -268,7 +269,7 @@ class SettingsPageState extends State<SettingsPage> {
                     style: ElevatedButton.styleFrom(
                       padding: const EdgeInsets.symmetric(vertical: 14),
                       shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12)), // Hapus const
+                          borderRadius: BorderRadius.circular(12)),
                     ),
                   ),
                 ),

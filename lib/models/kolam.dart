@@ -15,43 +15,37 @@ class Kolam {
   });
 
   void updateSensorCards() {
-    final statuses = getSensorStatuses();
+    final statuses = getSensorStatuses() ?? {};
     sensorData = [
       SensorCardData(
         icon: const Icon(Icons.thermostat),
         label: 'Suhu',
         value: '${data.suhu.toStringAsFixed(1)} °C',
-        color: getColorForStatus(statuses['suhu']!),
+        color: getColorForStatus(statuses['suhu'] ?? SensorStatus.normal),
       ),
       SensorCardData(
         icon: const Icon(Icons.opacity),
         label: 'pH',
         value: '${data.ph.toStringAsFixed(1)}',
-        color: getColorForStatus(statuses['ph']!),
-      ),
-      SensorCardData(
-        icon: const Icon(Icons.blur_on),
-        label: 'Kekeruhan',
-        value: '${data.kekeruhan.toStringAsFixed(1)} NTU',
-        color: getColorForStatus(statuses['kekeruhan']!),
+        color: getColorForStatus(statuses['ph'] ?? SensorStatus.normal),
       ),
       SensorCardData(
         icon: const Icon(Icons.waves),
         label: 'DO',
         value: '${data.dissolvedOxygen.toStringAsFixed(1)} mg/L',
-        color: getColorForStatus(statuses['dissolved_oxygen']!),
+        color: getColorForStatus(statuses['dissolved_oxygen'] ?? SensorStatus.normal),
       ),
       SensorCardData(
         icon: const Icon(Icons.fastfood),
         label: 'Berat Pakan',
         value: '${data.berat.toStringAsFixed(1)} Kg',
-        color: getColorForStatus(statuses['berat']!),
+        color: getColorForStatus(statuses['berat'] ?? SensorStatus.normal),
       ),
       SensorCardData(
         icon: const Icon(Icons.water_drop),
         label: 'Level Air',
         value: '${data.tinggiAir.toStringAsFixed(1)} %',
-        color: getColorForStatus(statuses['tinggi_air']!),
+        color: getColorForStatus(statuses['tinggi_air'] ?? SensorStatus.normal),
       ),
     ];
   }
@@ -68,9 +62,10 @@ class Kolam {
   }
 
   factory Kolam.generate(String id, String name) {
+    final initialData = SensorData.generateRandom();
     return Kolam(
       name: name,
-      data: SensorData.generateRandom(),
+      data: initialData,
       thresholds: {
         'suhu': SensorThreshold(
           normalMin: 20,
@@ -83,12 +78,6 @@ class Kolam {
           normalMax: 8.0,
           criticalMin: 5.0,
           criticalMax: 9.0,
-        ),
-        'kekeruhan': SensorThreshold(
-          normalMin: 10,
-          normalMax: 30,
-          criticalMin: 5,
-          criticalMax: 50,
         ),
         'do': SensorThreshold(
           normalMin: 5,
@@ -109,8 +98,8 @@ class Kolam {
           criticalMax: 60,
         ),
       },
-      sensorData: [],
-    );
+      sensorData: [], // Akan diisi oleh updateSensorCards
+    )..updateSensorCards(); // Panggil langsung untuk inisialisasi
   }
 
   void updateSensorData(SensorData newData) {
@@ -118,7 +107,7 @@ class Kolam {
     updateSensorCards();
   }
 
-  Map<String, SensorStatus> getSensorStatuses() {
+  Map<String, SensorStatus>? getSensorStatuses() {
     return data.getStatusMap(thresholds);
   }
 }

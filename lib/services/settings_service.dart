@@ -20,12 +20,6 @@ class SettingsService {
         criticalMin: prefs.getDouble('ph_critical_min') ?? defaultThresholds['ph']!.criticalMin,
         criticalMax: prefs.getDouble('ph_critical_max') ?? defaultThresholds['ph']!.criticalMax,
       ),
-      'kekeruhan': SensorThreshold(
-        normalMin: prefs.getDouble('kekeruhan_normal_min') ?? defaultThresholds['kekeruhan']!.normalMin,
-        normalMax: prefs.getDouble('kekeruhan_normal_max') ?? defaultThresholds['kekeruhan']!.normalMax,
-        criticalMin: prefs.getDouble('kekeruhan_critical_min') ?? defaultThresholds['kekeruhan']!.criticalMin,
-        criticalMax: prefs.getDouble('kekeruhan_critical_max') ?? defaultThresholds['kekeruhan']!.criticalMax,
-      ),
       'do': SensorThreshold(
         normalMin: prefs.getDouble('do_normal_min') ?? defaultThresholds['do']!.normalMin,
         normalMax: prefs.getDouble('do_normal_max') ?? defaultThresholds['do']!.normalMax,
@@ -60,11 +54,6 @@ class SettingsService {
     prefs.setDouble('ph_normal_max', thresholds['ph']!.normalMax);
     prefs.setDouble('ph_critical_min', thresholds['ph']!.criticalMin);
     prefs.setDouble('ph_critical_max', thresholds['ph']!.criticalMax);
-
-    prefs.setDouble('kekeruhan_normal_min', thresholds['kekeruhan']!.normalMin);
-    prefs.setDouble('kekeruhan_normal_max', thresholds['kekeruhan']!.normalMax);
-    prefs.setDouble('kekeruhan_critical_min', thresholds['kekeruhan']!.criticalMin);
-    prefs.setDouble('kekeruhan_critical_max', thresholds['kekeruhan']!.criticalMax);
 
     prefs.setDouble('do_normal_min', thresholds['do']!.normalMin);
     prefs.setDouble('do_normal_max', thresholds['do']!.normalMax);

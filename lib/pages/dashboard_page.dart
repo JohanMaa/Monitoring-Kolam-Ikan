@@ -41,37 +41,31 @@ class DashboardPageState extends State<DashboardPage>
         icon: const Icon(Icons.thermostat),
         label: 'Suhu',
         value: '${sensorData.suhu.toStringAsFixed(1)} °C',
-        color: getColorForStatus(statuses['suhu']!),
+        color: getColorForStatus(statuses['suhu'] ?? SensorStatus.normal),
       ),
       SensorCardData(
         icon: const Icon(Icons.opacity),
         label: 'pH',
         value: '${sensorData.ph.toStringAsFixed(1)}',
-        color: getColorForStatus(statuses['ph']!),
-      ),
-      SensorCardData(
-        icon: const Icon(Icons.blur_on),
-        label: 'Kekeruhan',
-        value: '${sensorData.kekeruhan.toStringAsFixed(1)} NTU',
-        color: getColorForStatus(statuses['kekeruhan']!),
+        color: getColorForStatus(statuses['ph'] ?? SensorStatus.normal),
       ),
       SensorCardData(
         icon: const Icon(Icons.waves),
         label: 'DO',
         value: '${sensorData.dissolvedOxygen.toStringAsFixed(1)} mg/L',
-        color: getColorForStatus(statuses['dissolved_oxygen']!),
+        color: getColorForStatus(statuses['dissolved_oxygen'] ?? SensorStatus.normal),
       ),
       SensorCardData(
         icon: const Icon(Icons.fastfood),
         label: 'Berat Pakan',
         value: '${sensorData.berat.toStringAsFixed(1)} Kg',
-        color: getColorForStatus(statuses['berat']!),
+        color: getColorForStatus(statuses['berat'] ?? SensorStatus.normal),
       ),
       SensorCardData(
         icon: const Icon(Icons.water_drop),
         label: 'Level Air',
         value: '${sensorData.tinggiAir.toStringAsFixed(1)} %',
-        color: getColorForStatus(statuses['tinggi_air']!),
+        color: getColorForStatus(statuses['tinggi_air'] ?? SensorStatus.normal),
       ),
     ];
   }
@@ -83,7 +77,6 @@ class DashboardPageState extends State<DashboardPage>
         data: SensorData(
           suhu: 0,
           ph: 0,
-          kekeruhan: 0,
           dissolvedOxygen: 0,
           berat: 0,
           tinggiAir: 0,
@@ -110,7 +103,7 @@ class DashboardPageState extends State<DashboardPage>
   }
 
   void updateSensorData(Map<String, dynamic> data) {
-    final kolamName = data['kolam'];
+    final kolamName = data['kolam'] as String?;
     if (kolamName == null) return;
 
     setState(() {
@@ -119,7 +112,6 @@ class DashboardPageState extends State<DashboardPage>
           kolam.data = SensorData(
             suhu: (data['suhu'] ?? kolam.data.suhu).toDouble(),
             ph: (data['ph'] ?? kolam.data.ph).toDouble(),
-            kekeruhan: (data['kekeruhan'] ?? kolam.data.kekeruhan).toDouble(),
             dissolvedOxygen: (data['do'] ?? kolam.data.dissolvedOxygen).toDouble(),
             berat: (data['berat_pakan'] ?? kolam.data.berat).toDouble(),
             tinggiAir: (data['level_air'] ?? kolam.data.tinggiAir).toDouble(),
@@ -193,19 +185,15 @@ class DashboardPageState extends State<DashboardPage>
         return StatefulBuilder(
           builder: (context, setStateDialog) {
             mqttService.onDataReceived = (data) {
-              final String? namaKolam = data['kolam'];
+              final String? namaKolam = data['kolam'] as String?;
               if (namaKolam == kolam.name) {
                 setStateDialog(() {
                   kolam.data = SensorData(
                     suhu: (data['suhu'] ?? kolam.data.suhu).toDouble(),
                     ph: (data['ph'] ?? kolam.data.ph).toDouble(),
-                    kekeruhan:
-                        (data['kekeruhan'] ?? kolam.data.kekeruhan).toDouble(),
-                    dissolvedOxygen:
-                        (data['do'] ?? kolam.data.dissolvedOxygen).toDouble(),
+                    dissolvedOxygen: (data['do'] ?? kolam.data.dissolvedOxygen).toDouble(),
                     berat: (data['berat_pakan'] ?? kolam.data.berat).toDouble(),
-                    tinggiAir:
-                        (data['level_air'] ?? kolam.data.tinggiAir).toDouble(),
+                    tinggiAir: (data['level_air'] ?? kolam.data.tinggiAir).toDouble(),
                     sensorType: data['sensorType'] ?? kolam.data.sensorType,
                     value: (data['value'] ?? kolam.data.value).toDouble(),
                   );
@@ -222,6 +210,8 @@ class DashboardPageState extends State<DashboardPage>
                   itemCount: kolam.sensorData.length,
                   itemBuilder: (context, index) {
                     final data = kolam.sensorData[index];
+                    final statusKey = data.label.toLowerCase().replaceAll(' ', '_');
+                    final status = kolam.data.getStatusMap(thresholds)[statusKey] ?? SensorStatus.normal;
                     return Padding(
                       padding: const EdgeInsets.symmetric(vertical: 4.0),
                       child: SensorCard(
@@ -231,17 +221,12 @@ class DashboardPageState extends State<DashboardPage>
                             ? '°C'
                             : data.label == 'DO'
                                 ? 'mg/L'
-                                : data.label == 'Kekeruhan'
-                                    ? 'NTU'
                                     : data.label == 'Berat Pakan'
                                         ? 'Kg'
                                         : data.label == 'Level Air'
                                             ? '%'
                                             : '',
-                        status: kolam.data
-                                .getStatusMap(thresholds)[
-                                    data.label.toLowerCase().replaceAll(' ', '_')] ??
-                            SensorStatus.normal,
+                        status: status,
                         data: kolam.data,
                       ),
                     );
@@ -346,10 +331,9 @@ class DashboardPageState extends State<DashboardPage>
             children: [
               Text('Nama Kolam: ${kolam.name}'),
               const SizedBox(height: 10),
-              for (var data in kolam.sensorData)
-                Text('${data.label}: ${data.value}'),
+              for (var data in kolam.sensorData) Text('${data.label}: ${data.value}'),
               const SizedBox(height: 10),
-              Text('Status: ${kolam.data.getStatusMap(thresholds)}'),
+              Text('Status: ${kolam.data.getStatusMap(thresholds).toString()}'),
               Text('Waktu Terakhir Update: ${DateTime.now().toLocal()}'),
             ],
           ),

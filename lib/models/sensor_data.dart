@@ -3,7 +3,6 @@ import 'dart:math';
 class SensorData {
   final double suhu;
   final double ph;
-  final double kekeruhan;
   final double dissolvedOxygen;
   final double berat;
   final double tinggiAir;
@@ -13,7 +12,6 @@ class SensorData {
   SensorData({
     required this.suhu,
     required this.ph,
-    required this.kekeruhan,
     required this.dissolvedOxygen,
     required this.berat,
     required this.tinggiAir,
@@ -24,7 +22,6 @@ class SensorData {
   SensorData copyWith({
     double? suhu,
     double? ph,
-    double? kekeruhan,
     double? dissolvedOxygen,
     double? berat,
     double? tinggiAir,
@@ -34,7 +31,6 @@ class SensorData {
     return SensorData(
       suhu: suhu ?? this.suhu,
       ph: ph ?? this.ph,
-      kekeruhan: kekeruhan ?? this.kekeruhan,
       dissolvedOxygen: dissolvedOxygen ?? this.dissolvedOxygen,
       berat: berat ?? this.berat,
       tinggiAir: tinggiAir ?? this.tinggiAir,
@@ -47,7 +43,6 @@ class SensorData {
     return SensorData(
       suhu: (json['suhu'] ?? 0).toDouble(),
       ph: (json['ph'] ?? 0).toDouble(),
-      kekeruhan: (json['kekeruhan'] ?? 0).toDouble(),
       dissolvedOxygen: (json['do'] ?? 0).toDouble(),
       berat: (json['berat_pakan'] ?? 0).toDouble(),
       tinggiAir: (json['level_air'] ?? 0).toDouble(),
@@ -60,12 +55,11 @@ class SensorData {
     final Random rand = Random();
     final List<String> sensorTypes = ['Suhu', 'pH', 'Kekeruhan', 'DO', 'Berat Pakan', 'Level Air'];
     return SensorData(
-      suhu: 15 + rand.nextDouble() * 15, // 15 - 30°C
-      ph: 5 + rand.nextDouble() * 3, // 5 - 8
-      kekeruhan: 10 + rand.nextDouble() * 40, // 10 - 50 NTU
-      dissolvedOxygen: 3 + rand.nextDouble() * 7, // 3 - 10 mg/L
-      berat: rand.nextDouble() * 5, // 0 - 5 Kg
-      tinggiAir: 10 + rand.nextDouble() * 40, // 10 - 50%
+      suhu: 15 + rand.nextDouble() * 15,
+      ph: 5 + rand.nextDouble() * 3,
+      dissolvedOxygen: 3 + rand.nextDouble() * 7,
+      berat: rand.nextDouble() * 5,
+      tinggiAir: 10 + rand.nextDouble() * 40,
       sensorType: sensorTypes[rand.nextInt(sensorTypes.length)],
       value: rand.nextDouble() * 100,
     );
@@ -73,12 +67,11 @@ class SensorData {
 
   Map<String, SensorStatus> getStatusMap(Map<String, SensorThreshold> thresholds) {
     return {
-      'suhu': getStatus(suhu, thresholds['suhu']!),
-      'ph': getStatus(ph, thresholds['ph']!),
-      'kekeruhan': getStatus(kekeruhan, thresholds['kekeruhan']!),
-      'dissolved_oxygen': getStatus(dissolvedOxygen, thresholds['do']!),
-      'berat': getStatus(berat, thresholds['berat']!),
-      'tinggi_air': getStatus(tinggiAir, thresholds['tinggi_air']!),
+      'suhu': getStatus(suhu, thresholds['suhu'] ?? SensorThreshold(normalMin: 0, normalMax: 0, criticalMin: 0, criticalMax: 0)),
+      'ph': getStatus(ph, thresholds['ph'] ?? SensorThreshold(normalMin: 0, normalMax: 0, criticalMin: 0, criticalMax: 0)),
+      'dissolved_oxygen': getStatus(dissolvedOxygen, thresholds['do'] ?? SensorThreshold(normalMin: 0, normalMax: 0, criticalMin: 0, criticalMax: 0)),
+      'berat': getStatus(berat, thresholds['berat'] ?? SensorThreshold(normalMin: 0, normalMax: 0, criticalMin: 0, criticalMax: 0)),
+      'tinggi_air': getStatus(tinggiAir, thresholds['tinggi_air'] ?? SensorThreshold(normalMin: 0, normalMax: 0, criticalMin: 0, criticalMax: 0)),
     };
   }
 

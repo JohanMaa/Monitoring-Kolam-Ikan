@@ -22,7 +22,6 @@ class StatusEvaluator {
     return {
       'suhu': evaluateStatus(sensorData.suhu, thresholds['suhu']!),
       'ph': evaluateStatus(sensorData.ph, thresholds['ph']!),
-      'kekeruhan': evaluateStatus(sensorData.kekeruhan, thresholds['kekeruhan']!),
     };
   }
 }
