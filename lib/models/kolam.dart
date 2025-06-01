@@ -2,12 +2,14 @@ import 'package:flutter/material.dart';
 import 'sensor_data.dart';
 
 class Kolam {
+  String id;
   String name;
   SensorData data;
   Map<String, SensorThreshold> thresholds;
-  List<SensorCardData> sensorData;
+  Map<String, SensorCardData> sensorData;
 
   Kolam({
+    required this.id,
     required this.name,
     required this.data,
     required this.thresholds,
@@ -16,38 +18,38 @@ class Kolam {
 
   void updateSensorCards() {
     final statuses = getSensorStatuses() ?? {};
-    sensorData = [
-      SensorCardData(
+    sensorData = {
+      'suhu': SensorCardData(
         icon: const Icon(Icons.thermostat),
         label: 'Suhu',
         value: '${data.suhu.toStringAsFixed(1)} °C',
         color: getColorForStatus(statuses['suhu'] ?? SensorStatus.normal),
       ),
-      SensorCardData(
+      'ph': SensorCardData(
         icon: const Icon(Icons.opacity),
         label: 'pH',
         value: '${data.ph.toStringAsFixed(1)}',
         color: getColorForStatus(statuses['ph'] ?? SensorStatus.normal),
       ),
-      SensorCardData(
+      'dissolved_oxygen': SensorCardData(
         icon: const Icon(Icons.waves),
         label: 'DO',
         value: '${data.dissolvedOxygen.toStringAsFixed(1)} mg/L',
         color: getColorForStatus(statuses['dissolved_oxygen'] ?? SensorStatus.normal),
       ),
-      SensorCardData(
+      'berat': SensorCardData(
         icon: const Icon(Icons.fastfood),
         label: 'Berat Pakan',
         value: '${data.berat.toStringAsFixed(1)} Kg',
         color: getColorForStatus(statuses['berat'] ?? SensorStatus.normal),
       ),
-      SensorCardData(
+      'tinggi_air': SensorCardData(
         icon: const Icon(Icons.water_drop),
         label: 'Level Air',
         value: '${data.tinggiAir.toStringAsFixed(1)} %',
         color: getColorForStatus(statuses['tinggi_air'] ?? SensorStatus.normal),
       ),
-    ];
+    };
   }
 
   Color getColorForStatus(SensorStatus status) {
@@ -61,11 +63,21 @@ class Kolam {
     }
   }
 
-  factory Kolam.generate(String id, String name) {
-    final initialData = SensorData.generateRandom();
+  factory Kolam.generate(String id, String name, {SensorData? initialData}) {
+    // Gunakan initialData jika diberikan, jika tidak buat data dengan nilai 0
+    final sensorData = initialData ?? SensorData(
+      suhu: 0,
+      ph: 0,
+      dissolvedOxygen: 0,
+      berat: 0,
+      tinggiAir: 0,
+      sensorType: 'Suhu',
+      value: 0,
+    );
     return Kolam(
+      id: id,
       name: name,
-      data: initialData,
+      data: sensorData,
       thresholds: {
         'suhu': SensorThreshold(
           normalMin: 20,
@@ -98,8 +110,8 @@ class Kolam {
           criticalMax: 60,
         ),
       },
-      sensorData: [], // Akan diisi oleh updateSensorCards
-    )..updateSensorCards(); // Panggil langsung untuk inisialisasi
+      sensorData: {},
+    )..updateSensorCards();
   }
 
   void updateSensorData(SensorData newData) {

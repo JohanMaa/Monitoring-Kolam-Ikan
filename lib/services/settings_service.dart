@@ -1,13 +1,21 @@
+import 'package:flutter/foundation.dart';
 import 'package:monitoring_kolam_ikan/models/sensor_data.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'default_threshold.dart';
 
 class SettingsService {
+  // ValueNotifier untuk notifikasi perubahan thresholds
+  static final ValueNotifier<Map<String, SensorThreshold>> _thresholdsNotifier =
+      ValueNotifier<Map<String, SensorThreshold>>(defaultThresholds);
+
+  // Getter untuk ValueNotifier
+  static ValueNotifier<Map<String, SensorThreshold>> get thresholdsNotifier => _thresholdsNotifier;
+
   // Mengambil threshold yang disimpan dari SharedPreferences
   static Future<Map<String, SensorThreshold>> getThresholds() async {
     SharedPreferences prefs = await SharedPreferences.getInstance();
 
-    return {
+    final thresholds = {
       'suhu': SensorThreshold(
         normalMin: prefs.getDouble('suhu_normal_min') ?? defaultThresholds['suhu']!.normalMin,
         normalMax: prefs.getDouble('suhu_normal_max') ?? defaultThresholds['suhu']!.normalMax,
@@ -39,12 +47,17 @@ class SettingsService {
         criticalMax: prefs.getDouble('tinggi_air_critical_max') ?? defaultThresholds['tinggi_air']!.criticalMax,
       ),
     };
+
+    // Perbarui ValueNotifier dengan data yang diambil
+    _thresholdsNotifier.value = thresholds;
+    return thresholds;
   }
 
-  // Menyimpan threshold yang baru ke SharedPreferences
+  // Menyimpan semua threshold sekaligus ke SharedPreferences
   static Future<void> setThresholds(Map<String, SensorThreshold> thresholds) async {
     SharedPreferences prefs = await SharedPreferences.getInstance();
 
+    // Simpan thresholds untuk semua sensor
     prefs.setDouble('suhu_normal_min', thresholds['suhu']!.normalMin);
     prefs.setDouble('suhu_normal_max', thresholds['suhu']!.normalMax);
     prefs.setDouble('suhu_critical_min', thresholds['suhu']!.criticalMin);
@@ -69,9 +82,12 @@ class SettingsService {
     prefs.setDouble('tinggi_air_normal_max', thresholds['tinggi_air']!.normalMax);
     prefs.setDouble('tinggi_air_critical_min', thresholds['tinggi_air']!.criticalMin);
     prefs.setDouble('tinggi_air_critical_max', thresholds['tinggi_air']!.criticalMax);
+
+    // Perbarui ValueNotifier untuk notifikasi perubahan
+    _thresholdsNotifier.value = thresholds;
   }
 
-  // Menyimpan threshold yang baru untuk sensor tertentu
+  // Menyimpan threshold untuk sensor tertentu (opsional, tetap dipertahankan untuk kompatibilitas)
   static Future<void> saveThreshold(String sensor, SensorThreshold newThreshold) async {
     SharedPreferences prefs = await SharedPreferences.getInstance();
 
@@ -79,5 +95,12 @@ class SettingsService {
     prefs.setDouble('${sensor}_normal_max', newThreshold.normalMax);
     prefs.setDouble('${sensor}_critical_min', newThreshold.criticalMin);
     prefs.setDouble('${sensor}_critical_max', newThreshold.criticalMax);
+
+    // Ambil thresholds saat ini dan perbarui hanya untuk sensor yang diubah
+    final currentThresholds = await getThresholds();
+    currentThresholds[sensor] = newThreshold;
+
+    // Perbarui ValueNotifier
+    _thresholdsNotifier.value = currentThresholds;
   }
 }

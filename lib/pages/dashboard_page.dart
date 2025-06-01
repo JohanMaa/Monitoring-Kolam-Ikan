@@ -1,16 +1,18 @@
 import 'package:flutter/material.dart';
 import 'package:font_awesome_flutter/font_awesome_flutter.dart';
-import '../models/kolam.dart';
-import '../models/sensor_data.dart';
+import 'package:monitoring_kolam_ikan/models/kolam.dart';
+import 'package:monitoring_kolam_ikan/models/sensor_data.dart';
 import 'package:uuid/uuid.dart';
-import '../widgets/sensor_card.dart';
-import '../services/mqtt_service.dart';
-import 'settings_page.dart';
-import 'connection_page.dart';
-import '../services/default_threshold.dart';
+import 'package:monitoring_kolam_ikan/widgets/sensor_card.dart';
+import 'package:monitoring_kolam_ikan/services/mqtt_service.dart';
+import 'package:monitoring_kolam_ikan/pages/settings_page.dart';
+import 'package:monitoring_kolam_ikan/pages/connection_page.dart';
+import 'package:monitoring_kolam_ikan/services/default_threshold.dart';
+import 'dart:convert';
+import 'package:shared_preferences/shared_preferences.dart';
 
 class DashboardPage extends StatefulWidget {
-  const DashboardPage({Key? key}) : super(key: key);
+  const DashboardPage({super.key});
 
   @override
   DashboardPageState createState() => DashboardPageState();
@@ -22,8 +24,8 @@ class DashboardPageState extends State<DashboardPage>
   int _selectedIndex = 0;
   List<Kolam> kolams = [];
   final GlobalKey<AnimatedListState> _listKey = GlobalKey<AnimatedListState>();
-
   Map<String, SensorThreshold> thresholds = defaultThresholds;
+  Map<String, DateTime> lastUpdateTimes = {};
 
   @override
   void initState() {
@@ -31,63 +33,62 @@ class DashboardPageState extends State<DashboardPage>
     mqttService = MqttService();
     mqttService.onDataReceived = updateSensorData;
     mqttService.connect();
-    _initialKolam();
+    _loadKolams();
+    if (kolams.isEmpty) _initialKolam();
   }
 
-  List<SensorCardData> _initialSensorData(SensorData sensorData) {
-    final statuses = sensorData.getStatusMap(thresholds);
-    return [
-      SensorCardData(
-        icon: const Icon(Icons.thermostat),
-        label: 'Suhu',
-        value: '${sensorData.suhu.toStringAsFixed(1)} °C',
-        color: getColorForStatus(statuses['suhu'] ?? SensorStatus.normal),
-      ),
-      SensorCardData(
-        icon: const Icon(Icons.opacity),
-        label: 'pH',
-        value: '${sensorData.ph.toStringAsFixed(1)}',
-        color: getColorForStatus(statuses['ph'] ?? SensorStatus.normal),
-      ),
-      SensorCardData(
-        icon: const Icon(Icons.waves),
-        label: 'DO',
-        value: '${sensorData.dissolvedOxygen.toStringAsFixed(1)} mg/L',
-        color: getColorForStatus(statuses['dissolved_oxygen'] ?? SensorStatus.normal),
-      ),
-      SensorCardData(
-        icon: const Icon(Icons.fastfood),
-        label: 'Berat Pakan',
-        value: '${sensorData.berat.toStringAsFixed(1)} Kg',
-        color: getColorForStatus(statuses['berat'] ?? SensorStatus.normal),
-      ),
-      SensorCardData(
-        icon: const Icon(Icons.water_drop),
-        label: 'Level Air',
-        value: '${sensorData.tinggiAir.toStringAsFixed(1)} %',
-        color: getColorForStatus(statuses['tinggi_air'] ?? SensorStatus.normal),
-      ),
-    ];
+  Future<void> _loadKolams() async {
+    final prefs = await SharedPreferences.getInstance();
+    final String? kolamsJson = prefs.getString('kolams');
+    if (kolamsJson != null) {
+      final List<dynamic> kolamsList = jsonDecode(kolamsJson);
+      setState(() {
+        kolams = kolamsList.map((json) {
+          final data = SensorData.fromJson(json['data']);
+          return Kolam(
+            id: json['id'] as String,
+            name: json['name'] as String,
+            data: data,
+            thresholds: thresholds,
+            sensorData: {},
+          )..updateSensorCards();
+        }).toList();
+      });
+    }
+  }
+
+  Future<void> _saveKolams() async {
+    final prefs = await SharedPreferences.getInstance();
+    final kolamsJson = kolams.map((kolam) => {
+      'id': kolam.id,
+      'name': kolam.name,
+      'data': {
+        'suhu': kolam.data.suhu,
+        'ph': kolam.data.ph,
+        'dissolvedOxygen': kolam.data.dissolvedOxygen,
+        'berat': kolam.data.berat,
+        'tinggiAir': kolam.data.tinggiAir,
+        'sensorType': kolam.data.sensorType,
+        'value': kolam.data.value,
+      },
+    }).toList();
+    await prefs.setString('kolams', jsonEncode(kolamsJson));
   }
 
   void _initialKolam() {
     setState(() {
-      final newKolam = Kolam(
-        name: 'Kolam 1',
-        data: SensorData(
-          suhu: 0,
-          ph: 0,
-          dissolvedOxygen: 0,
-          berat: 0,
-          tinggiAir: 0,
-          sensorType: 'Suhu',
-          value: 0,
-        ),
-        thresholds: defaultThresholds,
-        sensorData: [],
+      const initialData = SensorData(
+        suhu: 0,
+        ph: 0,
+        dissolvedOxygen: 0,
+        berat: 0,
+        tinggiAir: 0,
+        sensorType: 'Suhu',
+        value: 0,
       );
-      newKolam.updateSensorCards();
+      final newKolam = Kolam.generate('initial_kolam', 'Kolam 1', initialData: initialData);
       kolams.add(newKolam);
+      _saveKolams();
     });
   }
 
@@ -104,7 +105,9 @@ class DashboardPageState extends State<DashboardPage>
 
   void updateSensorData(Map<String, dynamic> data) {
     final kolamName = data['kolam'] as String?;
-    if (kolamName == null) return;
+    if (kolamName == null) {
+      return;
+    }
 
     setState(() {
       for (var kolam in kolams) {
@@ -118,6 +121,7 @@ class DashboardPageState extends State<DashboardPage>
             sensorType: data['sensorType'] ?? kolam.data.sensorType,
             value: (data['value'] ?? kolam.data.value).toDouble(),
           );
+          lastUpdateTimes[kolamName] = DateTime.now();
           kolam.updateSensorCards();
         }
       }
@@ -129,9 +133,16 @@ class DashboardPageState extends State<DashboardPage>
     if (kolamName.isNotEmpty) {
       final uuid = Uuid();
       final String kolamId = uuid.v4();
-      final Kolam newKolam = Kolam.generate(kolamId, kolamName);
-
-      newKolam.updateSensorCards();
+      const initialData = SensorData(
+        suhu: 0,
+        ph: 0,
+        dissolvedOxygen: 0,
+        berat: 0,
+        tinggiAir: 0,
+        sensorType: 'Suhu',
+        value: 0,
+      );
+      final Kolam newKolam = Kolam.generate(kolamId, kolamName, initialData: initialData);
 
       setState(() {
         kolams.add(newKolam);
@@ -141,6 +152,7 @@ class DashboardPageState extends State<DashboardPage>
         duration: const Duration(milliseconds: 500),
       );
       _selectedIndex = 0;
+      await _saveKolams();
     }
   }
 
@@ -197,6 +209,7 @@ class DashboardPageState extends State<DashboardPage>
                     sensorType: data['sensorType'] ?? kolam.data.sensorType,
                     value: (data['value'] ?? kolam.data.value).toDouble(),
                   );
+                  lastUpdateTimes[kolam.name] = DateTime.now();
                   kolam.updateSensorCards();
                 });
               }
@@ -209,8 +222,9 @@ class DashboardPageState extends State<DashboardPage>
                 child: ListView.builder(
                   itemCount: kolam.sensorData.length,
                   itemBuilder: (context, index) {
-                    final data = kolam.sensorData[index];
-                    final statusKey = data.label.toLowerCase().replaceAll(' ', '_');
+                    final sensorKey = kolam.sensorData.keys.elementAt(index);
+                    final data = kolam.sensorData[sensorKey]!;
+                    final statusKey = sensorKey;
                     final status = kolam.data.getStatusMap(thresholds)[statusKey] ?? SensorStatus.normal;
                     return Padding(
                       padding: const EdgeInsets.symmetric(vertical: 4.0),
@@ -221,13 +235,12 @@ class DashboardPageState extends State<DashboardPage>
                             ? '°C'
                             : data.label == 'DO'
                                 ? 'mg/L'
-                                    : data.label == 'Berat Pakan'
-                                        ? 'Kg'
-                                        : data.label == 'Level Air'
-                                            ? '%'
-                                            : '',
+                                : data.label == 'Berat Pakan'
+                                    ? 'Kg'
+                                    : data.label == 'Level Air'
+                                        ? '%'
+                                        : '',
                         status: status,
-                        data: kolam.data,
                       ),
                     );
                   },
@@ -260,6 +273,7 @@ class DashboardPageState extends State<DashboardPage>
       duration: const Duration(milliseconds: 300),
     );
     setState(() {});
+    _saveKolams();
   }
 
   Widget _buildKolamTile(Kolam kolam, int index) {
@@ -331,10 +345,10 @@ class DashboardPageState extends State<DashboardPage>
             children: [
               Text('Nama Kolam: ${kolam.name}'),
               const SizedBox(height: 10),
-              for (var data in kolam.sensorData) Text('${data.label}: ${data.value}'),
+              ...kolam.sensorData.entries.map((entry) => Text('${entry.value.label}: ${entry.value.value}')),
               const SizedBox(height: 10),
               Text('Status: ${kolam.data.getStatusMap(thresholds).toString()}'),
-              Text('Waktu Terakhir Update: ${DateTime.now().toLocal()}'),
+              Text('Waktu Terakhir Update: ${lastUpdateTimes[kolam.name]?.toLocal() ?? DateTime.now().toLocal()}'),
             ],
           ),
           actions: [
@@ -354,6 +368,7 @@ class DashboardPageState extends State<DashboardPage>
       setState(() {
         kolams[index].name = newName;
       });
+      _saveKolams();
     }
   }
 
@@ -386,7 +401,15 @@ class DashboardPageState extends State<DashboardPage>
           onConnected: () => setState(() {}),
         ),
         const Center(child: Text('Tidak ada notifikasi')),
-        SettingsPage(mqttService: mqttService),
+        SettingsPage(mqttService: mqttService, onThresholdsChanged: (newThresholds) {
+          setState(() {
+            thresholds = newThresholds;
+            for (var kolam in kolams) {
+              kolam.thresholds = thresholds;
+              kolam.updateSensorCards();
+            }
+          });
+        }),
       ];
 
   @override

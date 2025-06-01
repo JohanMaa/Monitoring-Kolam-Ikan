@@ -7,8 +7,9 @@ class MqttService {
   String broker = 'broker.emqx.io';
   int port = 1883;
   String topic = 'kolam_ikan/data';
-
   Function(Map<String, dynamic>)? onDataReceived;
+  int reconnectAttempts = 0;
+  final int maxReconnectAttempts = 3;
 
   void setConfiguration({
     required String broker,
@@ -21,6 +22,7 @@ class MqttService {
   }
 
   Future<void> connect() async {
+    reconnectAttempts = 0;
     client = MqttServerClient.withPort(broker, 'flutter_kolam_ikan', port);
     client.logging(on: false);
     client.keepAlivePeriod = 20;
@@ -51,19 +53,19 @@ class MqttService {
 
       client.updates!.listen((List<MqttReceivedMessage<MqttMessage?>>? event) {
         final recMess = event![0].payload as MqttPublishMessage;
-        final payload =
-            MqttPublishPayload.bytesToStringAsString(recMess.payload.message);
-        print('Payload received: $payload');
+        final payload = MqttPublishPayload.bytesToStringAsString(recMess.payload.message);
+        print('Received message from topic "${event[0].topic}": $payload');
 
         try {
           final decoded = jsonDecode(payload);
           if (decoded is Map<String, dynamic>) {
+            print('Decoded JSON data: $decoded');
             onDataReceived?.call(decoded);
           } else {
-            print('Decoded data is not a JSON object');
+            print('Error: Decoded data is not a JSON object, got: $decoded');
           }
         } catch (e) {
-          print('Error decoding JSON: $e');
+          print('Error decoding JSON: $e, Raw payload: $payload');
         }
       });
     } else {
@@ -84,13 +86,17 @@ class MqttService {
 
   void onDisconnected() {
     print('Disconnected from MQTT broker');
-    // Attempt to reconnect after 5 seconds
-    Future.delayed(const Duration(seconds: 5), () {
-      if (client.connectionStatus?.state != MqttConnectionState.connected) {
-        print('Attempting to reconnect...');
-        connect();
-      }
-    });
+    if (reconnectAttempts < maxReconnectAttempts) {
+      Future.delayed(const Duration(seconds: 5), () {
+        if (client.connectionStatus?.state != MqttConnectionState.connected) {
+          print('Attempting to reconnect... (Attempt ${reconnectAttempts + 1})');
+          reconnectAttempts++;
+          connect();
+        }
+      });
+    } else {
+      print('Max reconnect attempts reached. Please reconnect manually.');
+    }
   }
 
   void onSubscribed(String topic) {

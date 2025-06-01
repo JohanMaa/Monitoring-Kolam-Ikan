@@ -12,7 +12,7 @@ class MonitoringKolamIkanApp extends StatelessWidget {
       theme: ThemeData(
         textTheme: GoogleFonts.interTextTheme(
           Theme.of(context).textTheme,
-    ),
+        ),
         useMaterial3: true,
         colorScheme: ColorScheme.fromSeed(seedColor: Colors.cyan),
         scaffoldBackgroundColor: Colors.grey[50],

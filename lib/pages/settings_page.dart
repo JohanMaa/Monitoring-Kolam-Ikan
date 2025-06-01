@@ -1,16 +1,19 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:monitoring_kolam_ikan/services/default_threshold.dart';
 import 'dart:io';
 import 'package:monitoring_kolam_ikan/services/mqtt_service.dart';
-import '../models/sensor_data.dart';
-import '../services/settings_service.dart';
-import '../services/default_threshold.dart';
+import 'package:monitoring_kolam_ikan/models/sensor_data.dart';
+import 'package:monitoring_kolam_ikan/services/settings_service.dart';
+import 'package:path_provider/path_provider.dart';
+import 'package:shared_preferences/shared_preferences.dart'; // Ditambahkan
 
 class SettingsPage extends StatefulWidget {
   final MqttService mqttService;
+  final Function(Map<String, SensorThreshold>) onThresholdsChanged;
 
-  const SettingsPage({super.key, required this.mqttService});
+  const SettingsPage({super.key, required this.mqttService, required this.onThresholdsChanged});
 
   @override
   SettingsPageState createState() => SettingsPageState();
@@ -18,13 +21,7 @@ class SettingsPage extends StatefulWidget {
 
 class SettingsPageState extends State<SettingsPage> {
   final Map<String, TextEditingController> controllers = {};
-  final List<String> sensorNames = [
-    'suhu',
-    'ph',
-    'do',
-    'berat',
-    'tinggi_air'
-  ];
+  final List<String> sensorNames = ['suhu', 'ph', 'do', 'berat', 'tinggi_air'];
   Map<String, SensorThreshold> thresholds = {};
   File? _profileImage;
 
@@ -32,6 +29,7 @@ class SettingsPageState extends State<SettingsPage> {
   void initState() {
     super.initState();
     _loadAllThresholds();
+    _loadProfileImage();
   }
 
   Future<void> _loadAllThresholds() async {
@@ -42,14 +40,10 @@ class SettingsPageState extends State<SettingsPage> {
       final saved = savedThresholds[sensor];
       final th = saved ?? defaultThresholds[sensor]!;
 
-      controllers['$sensor-normalMin'] =
-          TextEditingController(text: th.normalMin.toString());
-      controllers['$sensor-normalMax'] =
-          TextEditingController(text: th.normalMax.toString());
-      controllers['$sensor-criticalMin'] =
-          TextEditingController(text: th.criticalMin.toString());
-      controllers['$sensor-criticalMax'] =
-          TextEditingController(text: th.criticalMax.toString());
+      controllers['$sensor-normalMin'] = TextEditingController(text: th.normalMin.toString());
+      controllers['$sensor-normalMax'] = TextEditingController(text: th.normalMax.toString());
+      controllers['$sensor-criticalMin'] = TextEditingController(text: th.criticalMin.toString());
+      controllers['$sensor-criticalMax'] = TextEditingController(text: th.criticalMax.toString());
     }
 
     if (mounted) {
@@ -57,21 +51,55 @@ class SettingsPageState extends State<SettingsPage> {
     }
   }
 
+  Future<void> _loadProfileImage() async {
+    final prefs = await SharedPreferences.getInstance();
+    final imagePath = prefs.getString('profile_image_path');
+    if (imagePath != null && File(imagePath).existsSync()) {
+      if (mounted) {
+        setState(() {
+          _profileImage = File(imagePath);
+        });
+      }
+    }
+  }
+
   Future<void> _saveThresholds() async {
     final newThresholds = <String, SensorThreshold>{};
     for (var sensor in sensorNames) {
+      final normalMin = double.tryParse(controllers['$sensor-normalMin']!.text) ?? 0.0;
+      final normalMax = double.tryParse(controllers['$sensor-normalMax']!.text) ?? 0.0;
+      final criticalMin = double.tryParse(controllers['$sensor-criticalMin']!.text) ?? 0.0;
+      final criticalMax = double.tryParse(controllers['$sensor-criticalMax']!.text) ?? 0.0;
+
+      if (normalMin > normalMax) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Normal Min untuk $sensor tidak boleh lebih besar dari Normal Max')),
+          );
+        }
+        return;
+      }
+      if (criticalMin > criticalMax) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Critical Min untuk $sensor tidak boleh lebih besar dari Critical Max')),
+          );
+        }
+        return;
+      }
+
       final newThreshold = SensorThreshold(
-        normalMin: double.tryParse(controllers['$sensor-normalMin']!.text) ?? 0.0,
-        normalMax: double.tryParse(controllers['$sensor-normalMax']!.text) ?? 0.0,
-        criticalMin: double.tryParse(controllers['$sensor-criticalMin']!.text) ?? 0.0,
-        criticalMax: double.tryParse(controllers['$sensor-criticalMax']!.text) ?? 0.0,
+        normalMin: normalMin,
+        normalMax: normalMax,
+        criticalMin: criticalMin,
+        criticalMax: criticalMax,
       );
       newThresholds[sensor] = newThreshold;
-      await SettingsService.saveThreshold(sensor, newThreshold);
     }
     thresholds = newThresholds;
-
+    await SettingsService.setThresholds(thresholds); // Gunakan setThresholds untuk semua sensor
     if (mounted) {
+      widget.onThresholdsChanged(thresholds);
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Ambang batas berhasil disimpan!')),
       );
@@ -82,9 +110,14 @@ class SettingsPageState extends State<SettingsPage> {
     final picker = ImagePicker();
     final pickedFile = await picker.pickImage(source: ImageSource.gallery);
     if (pickedFile != null && mounted) {
+      final directory = await getApplicationDocumentsDirectory();
+      final imagePath = '${directory.path}/profile_image.jpg';
+      final newImage = await File(pickedFile.path).copy(imagePath);
       setState(() {
-        _profileImage = File(pickedFile.path);
+        _profileImage = newImage;
       });
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString('profile_image_path', imagePath);
     }
   }
 
@@ -164,8 +197,7 @@ class SettingsPageState extends State<SettingsPage> {
     );
   }
 
-  Widget _buildProfile(
-      String name, String role, String description, String imageAsset) {
+  Widget _buildProfile(String name, String role, String description, String imageAsset) {
     return ListTile(
       contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
       leading: GestureDetector(
@@ -174,7 +206,7 @@ class SettingsPageState extends State<SettingsPage> {
           radius: 28,
           backgroundImage: _profileImage != null
               ? FileImage(_profileImage!)
-              : AssetImage(imageAsset) as ImageProvider,
+              : const AssetImage('assets/default_profile.jpg') as ImageProvider,
         ),
       ),
       title: Text(name),
@@ -183,8 +215,7 @@ class SettingsPageState extends State<SettingsPage> {
     );
   }
 
-  void _showProfileDialog(
-      String name, String role, String description, String imageAsset) {
+  void _showProfileDialog(String name, String role, String description, String imageAsset) {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
@@ -197,7 +228,7 @@ class SettingsPageState extends State<SettingsPage> {
               radius: 40,
               backgroundImage: _profileImage != null
                   ? FileImage(_profileImage!)
-                  : AssetImage(imageAsset) as ImageProvider,
+                  : const AssetImage('assets/default_profile.jpg') as ImageProvider,
             ),
             const SizedBox(height: 12),
             Text(
@@ -269,7 +300,8 @@ class SettingsPageState extends State<SettingsPage> {
                     style: ElevatedButton.styleFrom(
                       padding: const EdgeInsets.symmetric(vertical: 14),
                       shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12)),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
                     ),
                   ),
                 ),

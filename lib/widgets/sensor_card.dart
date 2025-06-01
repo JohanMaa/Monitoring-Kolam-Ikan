@@ -6,7 +6,6 @@ class SensorCard extends StatelessWidget {
   final String value;
   final String unit;
   final SensorStatus status;
-  final SensorData? data;
 
   const SensorCard({
     super.key,
@@ -14,7 +13,6 @@ class SensorCard extends StatelessWidget {
     required this.value,
     required this.unit,
     required this.status,
-    this.data,
   });
 
   Color _getStatusColor(SensorStatus status) {
@@ -34,7 +32,7 @@ class SensorCard extends StatelessWidget {
   Widget build(BuildContext context) {
     return Card(
       color: _getStatusColor(status),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)), // Hapus const
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
       child: Padding(
         padding: const EdgeInsets.all(16),
         child: Column(

@@ -22,6 +22,9 @@ class StatusEvaluator {
     return {
       'suhu': evaluateStatus(sensorData.suhu, thresholds['suhu']!),
       'ph': evaluateStatus(sensorData.ph, thresholds['ph']!),
+      'dissolved_oxygen': evaluateStatus(sensorData.dissolvedOxygen, thresholds['do']!),
+      'berat': evaluateStatus(sensorData.berat, thresholds['berat']!),
+      'tinggi_air': evaluateStatus(sensorData.tinggiAir, thresholds['tinggi_air']!),
     };
   }
 }

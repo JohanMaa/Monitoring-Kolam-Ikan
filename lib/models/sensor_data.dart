@@ -1,4 +1,36 @@
-import 'dart:math';
+enum SensorStatus { normal, kritis, darurat }
+
+class SensorThreshold {
+  final double normalMin;
+  final double normalMax;
+  final double criticalMin;
+  final double criticalMax;
+
+  const SensorThreshold({
+    required this.normalMin,
+    required this.normalMax,
+    required this.criticalMin,
+    required this.criticalMax,
+  });
+
+  factory SensorThreshold.fromJson(Map<String, dynamic> json) {
+    return SensorThreshold(
+      normalMin: (json['normalMin'] as num).toDouble(),
+      normalMax: (json['normalMax'] as num).toDouble(),
+      criticalMin: (json['criticalMin'] as num).toDouble(),
+      criticalMax: (json['criticalMax'] as num).toDouble(),
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'normalMin': normalMin,
+      'normalMax': normalMax,
+      'criticalMin': criticalMin,
+      'criticalMax': criticalMax,
+    };
+  }
+}
 
 class SensorData {
   final double suhu;
@@ -9,7 +41,7 @@ class SensorData {
   final String sensorType;
   final double value;
 
-  SensorData({
+  const SensorData({
     required this.suhu,
     required this.ph,
     required this.dissolvedOxygen,
@@ -19,105 +51,63 @@ class SensorData {
     required this.value,
   });
 
-  SensorData copyWith({
-    double? suhu,
-    double? ph,
-    double? dissolvedOxygen,
-    double? berat,
-    double? tinggiAir,
-    String? sensorType,
-    double? value,
-  }) {
-    return SensorData(
-      suhu: suhu ?? this.suhu,
-      ph: ph ?? this.ph,
-      dissolvedOxygen: dissolvedOxygen ?? this.dissolvedOxygen,
-      berat: berat ?? this.berat,
-      tinggiAir: tinggiAir ?? this.tinggiAir,
-      sensorType: sensorType ?? this.sensorType,
-      value: value ?? this.value,
-    );
-  }
-
   factory SensorData.fromJson(Map<String, dynamic> json) {
     return SensorData(
-      suhu: (json['suhu'] ?? 0).toDouble(),
-      ph: (json['ph'] ?? 0).toDouble(),
-      dissolvedOxygen: (json['do'] ?? 0).toDouble(),
-      berat: (json['berat_pakan'] ?? 0).toDouble(),
-      tinggiAir: (json['level_air'] ?? 0).toDouble(),
-      sensorType: json['sensorType'] ?? 'Unknown',
-      value: (json['value'] ?? 0).toDouble(),
+      suhu: (json['suhu'] as num).toDouble(),
+      ph: (json['ph'] as num).toDouble(),
+      dissolvedOxygen: (json['dissolvedOxygen'] as num).toDouble(),
+      berat: (json['berat'] as num).toDouble(),
+      tinggiAir: (json['tinggiAir'] as num).toDouble(),
+      sensorType: json['sensorType'] as String,
+      value: (json['value'] as num).toDouble(),
     );
   }
 
-  factory SensorData.generateRandom() {
-    final Random rand = Random();
-    final List<String> sensorTypes = ['Suhu', 'pH', 'Kekeruhan', 'DO', 'Berat Pakan', 'Level Air'];
-    return SensorData(
-      suhu: 15 + rand.nextDouble() * 15,
-      ph: 5 + rand.nextDouble() * 3,
-      dissolvedOxygen: 3 + rand.nextDouble() * 7,
-      berat: rand.nextDouble() * 5,
-      tinggiAir: 10 + rand.nextDouble() * 40,
-      sensorType: sensorTypes[rand.nextInt(sensorTypes.length)],
-      value: rand.nextDouble() * 100,
-    );
-  }
-
-  Map<String, SensorStatus> getStatusMap(Map<String, SensorThreshold> thresholds) {
+  Map<String, dynamic> toJson() {
     return {
-      'suhu': getStatus(suhu, thresholds['suhu'] ?? SensorThreshold(normalMin: 0, normalMax: 0, criticalMin: 0, criticalMax: 0)),
-      'ph': getStatus(ph, thresholds['ph'] ?? SensorThreshold(normalMin: 0, normalMax: 0, criticalMin: 0, criticalMax: 0)),
-      'dissolved_oxygen': getStatus(dissolvedOxygen, thresholds['do'] ?? SensorThreshold(normalMin: 0, normalMax: 0, criticalMin: 0, criticalMax: 0)),
-      'berat': getStatus(berat, thresholds['berat'] ?? SensorThreshold(normalMin: 0, normalMax: 0, criticalMin: 0, criticalMax: 0)),
-      'tinggi_air': getStatus(tinggiAir, thresholds['tinggi_air'] ?? SensorThreshold(normalMin: 0, normalMax: 0, criticalMin: 0, criticalMax: 0)),
+      'suhu': suhu,
+      'ph': ph,
+      'dissolvedOxygen': dissolvedOxygen,
+      'berat': berat,
+      'tinggiAir': tinggiAir,
+      'sensorType': sensorType,
+      'value': value,
     };
   }
 
-  SensorStatus getStatus(double value, SensorThreshold threshold) {
+  Map<String, SensorStatus> getStatusMap(Map<String, SensorThreshold> thresholds) {
+    final statusMap = <String, SensorStatus>{};
+
+    // Suhu
+    final suhuThreshold = thresholds['suhu']!;
+    statusMap['suhu'] = _getStatus(suhu, suhuThreshold);
+
+    // pH
+    final phThreshold = thresholds['ph']!;
+    statusMap['ph'] = _getStatus(ph, phThreshold);
+
+    // Dissolved Oxygen (DO)
+    final doThreshold = thresholds['do']!;
+    statusMap['do'] = _getStatus(dissolvedOxygen, doThreshold);
+
+    // Berat
+    final beratThreshold = thresholds['berat']!;
+    statusMap['berat'] = _getStatus(berat, beratThreshold);
+
+    // Tinggi Air
+    final tinggiAirThreshold = thresholds['tinggi_air']!;
+    statusMap['tinggi_air'] = _getStatus(tinggiAir, tinggiAirThreshold);
+
+    return statusMap;
+  }
+
+  SensorStatus _getStatus(double value, SensorThreshold threshold) {
     if (value >= threshold.normalMin && value <= threshold.normalMax) {
       return SensorStatus.normal;
-    } else if (value >= threshold.criticalMin && value <= threshold.criticalMax) {
-      return SensorStatus.kritis;
-    } else {
+    } else if (value < threshold.criticalMin || value > threshold.criticalMax) {
       return SensorStatus.darurat;
+    } else {
+      return SensorStatus.kritis;
     }
-  }
-}
-
-enum SensorStatus {
-  normal,
-  kritis,
-  darurat,
-}
-
-class SensorThreshold {
-  final double normalMin;
-  final double normalMax;
-  final double criticalMin;
-  final double criticalMax;
-
-  SensorThreshold({
-    required this.normalMin,
-    required this.normalMax,
-    required this.criticalMin,
-    required this.criticalMax,
-  });
-
-  Map<String, dynamic> toJson() => {
-        'normalMin': normalMin,
-        'normalMax': normalMax,
-        'criticalMin': criticalMin,
-        'criticalMax': criticalMax,
-      };
-
-  factory SensorThreshold.fromJson(Map<String, dynamic> json) {
-    return SensorThreshold(
-      normalMin: (json['normalMin'] ?? 0).toDouble(),
-      normalMax: (json['normalMax'] ?? 0).toDouble(),
-      criticalMin: (json['criticalMin'] ?? 0).toDouble(),
-      criticalMax: (json['criticalMax'] ?? 0).toDouble(),
-    );
   }
 }

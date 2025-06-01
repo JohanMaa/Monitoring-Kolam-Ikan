@@ -1,20 +1,21 @@
 import 'package:flutter/material.dart';
 import 'package:fluttertoast/fluttertoast.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import '../services/mqtt_service.dart';
+import 'package:monitoring_kolam_ikan/services/mqtt_service.dart';
+import 'package:mqtt_client/mqtt_client.dart';
 
 class ConnectionPage extends StatefulWidget {
   final MqttService mqttService;
   final VoidCallback onConnected;
 
   const ConnectionPage({
-    Key? key,
+    super.key,
     required this.mqttService,
     required this.onConnected,
-  }) : super(key: key);
+  });
 
   @override
-  _ConnectionPageState createState() => _ConnectionPageState();
+  State<ConnectionPage> createState() => _ConnectionPageState();
 }
 
 class _ConnectionPageState extends State<ConnectionPage> {
@@ -24,16 +25,35 @@ class _ConnectionPageState extends State<ConnectionPage> {
   final TextEditingController topicController = TextEditingController();
 
   String _statusMessage = 'Belum terkoneksi';
-  bool isConnecting = false; // ✅ Tambahan untuk loading
+  bool isConnecting = false;
 
   @override
   void initState() {
     super.initState();
     _loadSavedConfiguration();
+    // Tambahkan listener untuk status koneksi
+    widget.mqttService.client.updates?.listen((event) {
+      final connectionState = widget.mqttService.client.connectionStatus?.state;
+      if (connectionState == MqttConnectionState.connected) {
+        if (mounted) {
+          setState(() {
+            _statusMessage = 'Terhubung ke MQTT broker';
+            isConnecting = false;
+          });
+        }
+      } else if (connectionState == MqttConnectionState.disconnected) {
+        if (mounted) {
+          setState(() {
+            _statusMessage = 'Terputus dari MQTT broker';
+            isConnecting = false;
+          });
+        }
+      }
+    });
   }
 
   Future<void> _loadSavedConfiguration() async {
-    SharedPreferences prefs = await SharedPreferences.getInstance();
+    final prefs = await SharedPreferences.getInstance();
     if (!mounted) return;
     setState(() {
       brokerController.text = prefs.getString('mqtt_broker') ?? widget.mqttService.broker;
@@ -43,7 +63,7 @@ class _ConnectionPageState extends State<ConnectionPage> {
   }
 
   Future<void> _saveConfiguration() async {
-    SharedPreferences prefs = await SharedPreferences.getInstance();
+    final prefs = await SharedPreferences.getInstance();
     await prefs.setString('mqtt_broker', brokerController.text);
     await prefs.setInt('mqtt_port', int.parse(portController.text));
     await prefs.setString('mqtt_topic', topicController.text);
@@ -74,10 +94,12 @@ class _ConnectionPageState extends State<ConnectionPage> {
         await _saveConfiguration();
         await widget.mqttService.connect();
 
-        setState(() {
-          _statusMessage = 'Terhubung ke MQTT broker';
-          isConnecting = false;
-        });
+        if (mounted) {
+          setState(() {
+            _statusMessage = 'Terhubung ke MQTT broker';
+            isConnecting = false;
+          });
+        }
 
         Fluttertoast.showToast(
           msg: "Berhasil terhubung ke broker",
@@ -89,10 +111,12 @@ class _ConnectionPageState extends State<ConnectionPage> {
 
         widget.onConnected();
       } catch (e) {
-        setState(() {
-          _statusMessage = 'Gagal terhubung: $e';
-          isConnecting = false;
-        });
+        if (mounted) {
+          setState(() {
+            _statusMessage = 'Gagal terhubung: $e';
+            isConnecting = false;
+          });
+        }
 
         Fluttertoast.showToast(
           msg: "Gagal terhubung: $e",
@@ -102,6 +126,15 @@ class _ConnectionPageState extends State<ConnectionPage> {
           textColor: const Color.fromARGB(255, 0, 0, 0),
         );
       }
+    }
+  }
+
+  void _disconnectFromBroker() {
+    widget.mqttService.disconnect();
+    if (mounted) {
+      setState(() {
+        _statusMessage = 'Terputus dari MQTT broker';
+      });
     }
   }
 
@@ -118,7 +151,6 @@ class _ConnectionPageState extends State<ConnectionPage> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-
               const SizedBox(height: 16),
               Center(
                 child: Text(
@@ -143,7 +175,9 @@ class _ConnectionPageState extends State<ConnectionPage> {
                 keyboardType: TextInputType.number,
                 validator: (value) {
                   if (value == null || value.isEmpty) return 'Port tidak boleh kosong';
-                  if (int.tryParse(value) == null) return 'Port harus berupa angka';
+                  final port = int.tryParse(value);
+                  if (port == null) return 'Port harus berupa angka';
+                  if (port < 0 || port > 65535) return 'Port harus antara 0 dan 65535';
                   return null;
                 },
               ),
@@ -163,7 +197,7 @@ class _ConnectionPageState extends State<ConnectionPage> {
                       ? const SizedBox(
                           width: 20,
                           height: 20,
-                          child: CircularProgressIndicator(
+                          child: const CircularProgressIndicator(
                             strokeWidth: 2.5,
                             color: Colors.white,
                           ),
@@ -172,6 +206,26 @@ class _ConnectionPageState extends State<ConnectionPage> {
                   label: Text(isConnecting ? 'Menyambungkan...' : 'Hubungkan'),
                   style: ElevatedButton.styleFrom(
                     backgroundColor: Colors.cyan.shade700,
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    textStyle: const TextStyle(fontSize: 16),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 16),
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton.icon(
+                  onPressed: widget.mqttService.client.connectionStatus?.state == MqttConnectionState.connected
+                      ? _disconnectFromBroker
+                      : null,
+                  icon: const Icon(Icons.cloud_off),
+                  label: const Text('Putuskan Koneksi'),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.red.shade700,
                     foregroundColor: Colors.white,
                     padding: const EdgeInsets.symmetric(vertical: 14),
                     shape: RoundedRectangleBorder(
