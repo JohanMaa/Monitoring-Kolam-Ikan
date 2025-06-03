@@ -24,7 +24,7 @@ class MqttService {
   Future<void> connect() async {
     reconnectAttempts = 0;
     client = MqttServerClient.withPort(broker, 'flutter_kolam_ikan', port);
-    client.logging(on: false);
+    client.logging(on: true); // Aktifkan logging untuk debugging
     client.keepAlivePeriod = 20;
     client.onConnected = onConnected;
     client.onDisconnected = onDisconnected;

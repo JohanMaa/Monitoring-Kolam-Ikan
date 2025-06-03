@@ -22,7 +22,7 @@ class Kolam {
       'suhu': SensorCardData(
         icon: const Icon(Icons.thermostat),
         label: 'Suhu',
-        value: '${data.suhu.toStringAsFixed(1)} °C',
+        value: '${data.suhu.toStringAsFixed(1)} ',
         color: getColorForStatus(statuses['suhu'] ?? SensorStatus.normal),
       ),
       'ph': SensorCardData(
@@ -34,19 +34,19 @@ class Kolam {
       'dissolved_oxygen': SensorCardData(
         icon: const Icon(Icons.waves),
         label: 'DO',
-        value: '${data.dissolvedOxygen.toStringAsFixed(1)} mg/L',
+        value: '${data.dissolvedOxygen.toStringAsFixed(1)} ',
         color: getColorForStatus(statuses['dissolved_oxygen'] ?? SensorStatus.normal),
       ),
       'berat': SensorCardData(
         icon: const Icon(Icons.fastfood),
         label: 'Berat Pakan',
-        value: '${data.berat.toStringAsFixed(1)} Kg',
+        value: '${data.berat.toStringAsFixed(1)} ',
         color: getColorForStatus(statuses['berat'] ?? SensorStatus.normal),
       ),
       'tinggi_air': SensorCardData(
         icon: const Icon(Icons.water_drop),
         label: 'Level Air',
-        value: '${data.tinggiAir.toStringAsFixed(1)} %',
+        value: '${data.tinggiAir.toStringAsFixed(1)} ',
         color: getColorForStatus(statuses['tinggi_air'] ?? SensorStatus.normal),
       ),
     };

@@ -7,6 +7,7 @@ import 'package:monitoring_kolam_ikan/widgets/sensor_card.dart';
 import 'package:monitoring_kolam_ikan/services/mqtt_service.dart';
 import 'package:monitoring_kolam_ikan/pages/settings_page.dart';
 import 'package:monitoring_kolam_ikan/pages/connection_page.dart';
+import 'package:monitoring_kolam_ikan/pages/history_page.dart';
 import 'package:monitoring_kolam_ikan/services/default_threshold.dart';
 import 'dart:convert';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -23,6 +24,7 @@ class DashboardPageState extends State<DashboardPage>
   late MqttService mqttService;
   int _selectedIndex = 0;
   List<Kolam> kolams = [];
+  List<Map<String, dynamic>> history = [];
   final GlobalKey<AnimatedListState> _listKey = GlobalKey<AnimatedListState>();
   Map<String, SensorThreshold> thresholds = defaultThresholds;
   Map<String, DateTime> lastUpdateTimes = {};
@@ -32,28 +34,39 @@ class DashboardPageState extends State<DashboardPage>
     super.initState();
     mqttService = MqttService();
     mqttService.onDataReceived = updateSensorData;
-    mqttService.connect();
-    _loadKolams();
-    if (kolams.isEmpty) _initialKolam();
+    // Pastikan load data dari SharedPreferences sebelum membuat kolam awal
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      await _loadKolams();
+      await _loadHistory();
+      if (kolams.isEmpty) {
+        _initialKolam();
+      }
+      mqttService.connect(); // Connect setelah memuat data
+    });
   }
 
   Future<void> _loadKolams() async {
     final prefs = await SharedPreferences.getInstance();
     final String? kolamsJson = prefs.getString('kolams');
     if (kolamsJson != null) {
-      final List<dynamic> kolamsList = jsonDecode(kolamsJson);
-      setState(() {
-        kolams = kolamsList.map((json) {
-          final data = SensorData.fromJson(json['data']);
-          return Kolam(
-            id: json['id'] as String,
-            name: json['name'] as String,
-            data: data,
-            thresholds: thresholds,
-            sensorData: {},
-          )..updateSensorCards();
-        }).toList();
-      });
+      try {
+        final List<dynamic> kolamsList = jsonDecode(kolamsJson);
+        setState(() {
+          kolams = kolamsList.map((json) {
+            final data = SensorData.fromJson(json['data']);
+            return Kolam(
+              id: json['id'] as String,
+              name: json['name'] as String,
+              data: data,
+              thresholds: thresholds,
+              sensorData: {},
+            )..updateSensorCards();
+          }).toList();
+        });
+        print('Loaded kolams: ${kolams.map((k) => k.name).toList()}');
+      } catch (e) {
+        print('Error loading kolams: $e');
+      }
     }
   }
 
@@ -73,6 +86,28 @@ class DashboardPageState extends State<DashboardPage>
       },
     }).toList();
     await prefs.setString('kolams', jsonEncode(kolamsJson));
+    print('Saved kolams: ${kolams.map((k) => k.name).toList()}');
+  }
+
+  Future<void> _loadHistory() async {
+    final prefs = await SharedPreferences.getInstance();
+    final String? historyJson = prefs.getString('history');
+    if (historyJson != null) {
+      try {
+        setState(() {
+          history = List<Map<String, dynamic>>.from(jsonDecode(historyJson));
+        });
+        print('Loaded history: $history');
+      } catch (e) {
+        print('Error loading history: $e');
+      }
+    }
+  }
+
+  Future<void> _saveHistory() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString('history', jsonEncode(history));
+    print('Saved history: $history');
   }
 
   void _initialKolam() {
@@ -105,25 +140,91 @@ class DashboardPageState extends State<DashboardPage>
 
   void updateSensorData(Map<String, dynamic> data) {
     final kolamName = data['kolam'] as String?;
-    if (kolamName == null) {
+    final kolamId = data['id'] as String?;
+    if (kolamName == null && kolamId == null) {
+      print('No kolam name or id in data: $data');
       return;
     }
 
     setState(() {
-      for (var kolam in kolams) {
-        if (kolam.name == kolamName) {
-          kolam.data = SensorData(
-            suhu: (data['suhu'] ?? kolam.data.suhu).toDouble(),
-            ph: (data['ph'] ?? kolam.data.ph).toDouble(),
-            dissolvedOxygen: (data['do'] ?? kolam.data.dissolvedOxygen).toDouble(),
-            berat: (data['berat_pakan'] ?? kolam.data.berat).toDouble(),
-            tinggiAir: (data['level_air'] ?? kolam.data.tinggiAir).toDouble(),
-            sensorType: data['sensorType'] ?? kolam.data.sensorType,
-            value: (data['value'] ?? kolam.data.value).toDouble(),
-          );
-          lastUpdateTimes[kolamName] = DateTime.now();
-          kolam.updateSensorCards();
+      Kolam? targetKolam;
+
+      // Cari kolam berdasarkan id
+      if (kolamId != null) {
+        targetKolam = kolams.where((kolam) => kolam.id == kolamId).firstOrNull;
+      }
+      // Jika tidak ditemukan berdasarkan id, cari berdasarkan nama
+      if (targetKolam == null && kolamName != null) {
+        targetKolam = kolams.where((kolam) => kolam.name == kolamName).firstOrNull;
+      }
+
+      // Jika kolam tidak ditemukan, buat kolam baru
+      if (targetKolam == null && (kolamName != null || kolamId != null)) {
+        final uuid = Uuid();
+        final newId = kolamId ?? uuid.v4();
+        final newName = kolamName ?? 'Kolam Baru ${kolams.length + 1}';
+        const initialData = SensorData(
+          suhu: 0,
+          ph: 0,
+          dissolvedOxygen: 0,
+          berat: 0,
+          tinggiAir: 0,
+          sensorType: 'Suhu',
+          value: 0,
+        );
+        targetKolam = Kolam.generate(newId, newName, initialData: initialData);
+        kolams.add(targetKolam);
+        _listKey.currentState?.insertItem(
+          kolams.length - 1,
+          duration: const Duration(milliseconds: 500),
+        );
+        _saveKolams();
+        print('Created new kolam: ${targetKolam.name} (ID: ${targetKolam.id})');
+      }
+
+      if (targetKolam != null) {
+        final oldData = targetKolam.data;
+        final newData = SensorData(
+          suhu: (data['suhu'] ?? oldData.suhu).toDouble(),
+          ph: (data['ph'] ?? oldData.ph).toDouble(),
+          dissolvedOxygen: (data['do'] ?? oldData.dissolvedOxygen).toDouble(),
+          berat: (data['berat_pakan'] ?? oldData.berat).toDouble(),
+          tinggiAir: (data['level_air'] ?? oldData.tinggiAir).toDouble(),
+          sensorType: data['sensorType'] ?? oldData.sensorType,
+          value: (data['value'] ?? oldData.value).toDouble(),
+        );
+
+        // Periksa perubahan data sebelum menyimpan history
+        if (oldData.suhu != newData.suhu ||
+            oldData.ph != newData.ph ||
+            oldData.dissolvedOxygen != newData.dissolvedOxygen ||
+            oldData.berat != newData.berat ||
+            oldData.tinggiAir != newData.tinggiAir) {
+          history.add({
+            'kolamName': targetKolam.name,
+            'id': targetKolam.id,
+            'data': {
+              'suhu': oldData.suhu,
+              'ph': oldData.ph,
+              'dissolvedOxygen': oldData.dissolvedOxygen,
+              'berat': oldData.berat,
+              'tinggiAir': oldData.tinggiAir,
+              'sensorType': oldData.sensorType,
+              'value': oldData.value,
+            },
+            'timestamp': DateTime.now().toIso8601String(),
+          });
+          _saveHistory();
+          print('History updated for ${targetKolam.name} (ID: ${targetKolam.id}): $history');
         }
+
+        // Update data kolam
+        targetKolam.data = newData;
+        lastUpdateTimes[targetKolam.name] = DateTime.now();
+        targetKolam.updateSensorCards();
+        _saveKolams(); // Simpan data kolam setelah update
+      } else {
+        print('No matching or new kolam created for name: $kolamName or id: $kolamId');
       }
     });
   }
@@ -198,7 +299,8 @@ class DashboardPageState extends State<DashboardPage>
           builder: (context, setStateDialog) {
             mqttService.onDataReceived = (data) {
               final String? namaKolam = data['kolam'] as String?;
-              if (namaKolam == kolam.name) {
+              final String? kolamId = data['id'] as String?;
+              if (namaKolam == kolam.name || kolamId == kolam.id) {
                 setStateDialog(() {
                   kolam.data = SensorData(
                     suhu: (data['suhu'] ?? kolam.data.suhu).toDouble(),
@@ -344,6 +446,7 @@ class DashboardPageState extends State<DashboardPage>
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text('Nama Kolam: ${kolam.name}'),
+              Text('ID: ${kolam.id}'),
               const SizedBox(height: 10),
               ...kolam.sensorData.entries.map((entry) => Text('${entry.value.label}: ${entry.value.value}')),
               const SizedBox(height: 10),
@@ -400,7 +503,7 @@ class DashboardPageState extends State<DashboardPage>
           mqttService: mqttService,
           onConnected: () => setState(() {}),
         ),
-        const Center(child: Text('Tidak ada notifikasi')),
+        HistoryPage(history: history),
         SettingsPage(mqttService: mqttService, onThresholdsChanged: (newThresholds) {
           setState(() {
             thresholds = newThresholds;
@@ -453,8 +556,8 @@ class DashboardPageState extends State<DashboardPage>
             label: '',
           ),
           BottomNavigationBarItem(
-            icon: Icon(Icons.notifications),
-            label: 'Notifikasi',
+            icon: Icon(Icons.history),
+            label: 'History',
           ),
           BottomNavigationBarItem(
             icon: Icon(Icons.settings),
