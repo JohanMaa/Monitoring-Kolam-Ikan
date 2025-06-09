@@ -7,24 +7,28 @@ import 'package:monitoring_kolam_ikan/services/mqtt_service.dart';
 import 'package:monitoring_kolam_ikan/models/sensor_data.dart';
 import 'package:monitoring_kolam_ikan/services/settings_service.dart';
 import 'package:path_provider/path_provider.dart';
-import 'package:shared_preferences/shared_preferences.dart'; // Ditambahkan
+import 'package:shared_preferences/shared_preferences.dart';
 
+// Halaman pengaturan aplikasi
 class SettingsPage extends StatefulWidget {
   final MqttService mqttService;
   final Function(Map<String, SensorThreshold>) onThresholdsChanged;
 
+  // Konstruktor dengan parameter wajib
   const SettingsPage({super.key, required this.mqttService, required this.onThresholdsChanged});
 
   @override
   SettingsPageState createState() => SettingsPageState();
 }
 
+// State untuk mengelola logika halaman pengaturan
 class SettingsPageState extends State<SettingsPage> {
   final Map<String, TextEditingController> controllers = {};
   final List<String> sensorNames = ['suhu', 'ph', 'do', 'berat', 'tinggi_air'];
   Map<String, SensorThreshold> thresholds = {};
   File? _profileImage;
 
+  // Inisialisasi state
   @override
   void initState() {
     super.initState();
@@ -32,6 +36,7 @@ class SettingsPageState extends State<SettingsPage> {
     _loadProfileImage();
   }
 
+  // Memuat ambang batas sensor dari penyimpanan
   Future<void> _loadAllThresholds() async {
     final savedThresholds = await SettingsService.getThresholds();
     thresholds = savedThresholds;
@@ -51,6 +56,7 @@ class SettingsPageState extends State<SettingsPage> {
     }
   }
 
+  // Memuat gambar profil dari penyimpanan
   Future<void> _loadProfileImage() async {
     final prefs = await SharedPreferences.getInstance();
     final imagePath = prefs.getString('profile_image_path');
@@ -63,6 +69,7 @@ class SettingsPageState extends State<SettingsPage> {
     }
   }
 
+  // Menyimpan ambang batas sensor
   Future<void> _saveThresholds() async {
     final newThresholds = <String, SensorThreshold>{};
     for (var sensor in sensorNames) {
@@ -97,7 +104,7 @@ class SettingsPageState extends State<SettingsPage> {
       newThresholds[sensor] = newThreshold;
     }
     thresholds = newThresholds;
-    await SettingsService.setThresholds(thresholds); // Gunakan setThresholds untuk semua sensor
+    await SettingsService.setThresholds(thresholds);
     if (mounted) {
       widget.onThresholdsChanged(thresholds);
       ScaffoldMessenger.of(context).showSnackBar(
@@ -106,6 +113,7 @@ class SettingsPageState extends State<SettingsPage> {
     }
   }
 
+  // Memilih gambar profil dari galeri
   Future<void> _pickProfileImage() async {
     final picker = ImagePicker();
     final pickedFile = await picker.pickImage(source: ImageSource.gallery);
@@ -121,6 +129,7 @@ class SettingsPageState extends State<SettingsPage> {
     }
   }
 
+  // Membangun input untuk ambang batas sensor
   Widget _buildThresholdInput(String sensor) {
     return Card(
       elevation: 4,
@@ -181,6 +190,7 @@ class SettingsPageState extends State<SettingsPage> {
     );
   }
 
+  // Membangun field input untuk sensor
   Widget _inputField({
     required String sensor,
     required String key,
@@ -197,6 +207,7 @@ class SettingsPageState extends State<SettingsPage> {
     );
   }
 
+  // Membangun profil tim
   Widget _buildProfile(String name, String role, String description, String imageAsset) {
     return ListTile(
       contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
@@ -215,6 +226,7 @@ class SettingsPageState extends State<SettingsPage> {
     );
   }
 
+  // Menampilkan dialog profil
   void _showProfileDialog(String name, String role, String description, String imageAsset) {
     showDialog(
       context: context,
@@ -249,6 +261,7 @@ class SettingsPageState extends State<SettingsPage> {
     );
   }
 
+  // Membangun UI halaman pengaturan
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -318,6 +331,7 @@ class SettingsPageState extends State<SettingsPage> {
     );
   }
 
+  // Membangun informasi aplikasi
   Widget _buildAppInfo() {
     return const Column(
       crossAxisAlignment: CrossAxisAlignment.start,

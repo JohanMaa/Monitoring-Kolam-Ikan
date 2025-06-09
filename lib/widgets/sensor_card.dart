@@ -1,12 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:monitoring_kolam_ikan/models/sensor_data.dart';
 
+// Widget untuk menampilkan kartu sensor
 class SensorCard extends StatelessWidget {
   final String label;
   final String value;
   final String unit;
   final SensorStatus status;
 
+  // Konstruktor untuk menginisialisasi properti kartu
   const SensorCard({
     super.key,
     required this.label,
@@ -15,6 +17,7 @@ class SensorCard extends StatelessWidget {
     required this.status,
   });
 
+  // Fungsi untuk menentukan warna berdasarkan status sensor
   Color _getStatusColor(SensorStatus status) {
     switch (status) {
       case SensorStatus.normal:
@@ -30,6 +33,7 @@ class SensorCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // Membangun UI kartu sensor
     return Card(
       color: _getStatusColor(status),
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),

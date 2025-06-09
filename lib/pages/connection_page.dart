@@ -4,20 +4,24 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:monitoring_kolam_ikan/services/mqtt_service.dart';
 import 'package:mqtt_client/mqtt_client.dart';
 
+// Halaman untuk mengatur koneksi MQTT
 class ConnectionPage extends StatefulWidget {
   final MqttService mqttService;
   final VoidCallback onConnected;
 
+  // Konstruktor dengan parameter wajib
   const ConnectionPage({
     super.key,
     required this.mqttService,
     required this.onConnected,
+    required MqttConnectionState connectionStatus,
   });
 
   @override
   State<ConnectionPage> createState() => _ConnectionPageState();
 }
 
+// State untuk mengelola logika halaman koneksi
 class _ConnectionPageState extends State<ConnectionPage> {
   final _formKey = GlobalKey<FormState>();
   final TextEditingController brokerController = TextEditingController();
@@ -27,6 +31,7 @@ class _ConnectionPageState extends State<ConnectionPage> {
   String _statusMessage = 'Belum terkoneksi';
   bool isConnecting = false;
 
+  // Inisialisasi state dan konfigurasi
   @override
   void initState() {
     super.initState();
@@ -52,6 +57,7 @@ class _ConnectionPageState extends State<ConnectionPage> {
     });
   }
 
+  // Memuat konfigurasi tersimpan
   Future<void> _loadSavedConfiguration() async {
     final prefs = await SharedPreferences.getInstance();
     if (!mounted) return;
@@ -62,6 +68,7 @@ class _ConnectionPageState extends State<ConnectionPage> {
     });
   }
 
+  // Menyimpan konfigurasi ke penyimpanan
   Future<void> _saveConfiguration() async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString('mqtt_broker', brokerController.text);
@@ -69,6 +76,7 @@ class _ConnectionPageState extends State<ConnectionPage> {
     await prefs.setString('mqtt_topic', topicController.text);
   }
 
+  // Membersihkan sumber daya
   @override
   void dispose() {
     brokerController.dispose();
@@ -77,6 +85,7 @@ class _ConnectionPageState extends State<ConnectionPage> {
     super.dispose();
   }
 
+  // Menghubungkan ke broker MQTT
   Future<void> _connectToBroker() async {
     if (_formKey.currentState!.validate()) {
       setState(() {
@@ -129,6 +138,7 @@ class _ConnectionPageState extends State<ConnectionPage> {
     }
   }
 
+  // Memutuskan koneksi dari broker MQTT
   void _disconnectFromBroker() {
     widget.mqttService.disconnect();
     if (mounted) {
@@ -138,6 +148,7 @@ class _ConnectionPageState extends State<ConnectionPage> {
     }
   }
 
+  // Membangun UI halaman koneksi
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -197,7 +208,7 @@ class _ConnectionPageState extends State<ConnectionPage> {
                       ? const SizedBox(
                           width: 20,
                           height: 20,
-                          child: const CircularProgressIndicator(
+                          child: CircularProgressIndicator(
                             strokeWidth: 2.5,
                             color: Colors.white,
                           ),
@@ -252,6 +263,7 @@ class _ConnectionPageState extends State<ConnectionPage> {
     );
   }
 
+  // Membangun field input untuk form
   Widget _buildInputField({
     required String label,
     required TextEditingController controller,

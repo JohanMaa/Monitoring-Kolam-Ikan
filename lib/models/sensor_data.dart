@@ -1,11 +1,14 @@
+// Enum untuk status sensor
 enum SensorStatus { normal, kritis, darurat }
 
+// Kelas untuk menyimpan ambang batas sensor
 class SensorThreshold {
   final double normalMin;
   final double normalMax;
   final double criticalMin;
   final double criticalMax;
 
+  // Konstruktor dengan parameter wajib
   const SensorThreshold({
     required this.normalMin,
     required this.normalMax,
@@ -13,6 +16,7 @@ class SensorThreshold {
     required this.criticalMax,
   });
 
+  // Membuat instance dari JSON
   factory SensorThreshold.fromJson(Map<String, dynamic> json) {
     return SensorThreshold(
       normalMin: (json['normalMin'] as num).toDouble(),
@@ -22,6 +26,7 @@ class SensorThreshold {
     );
   }
 
+  // Mengonversi ke format JSON
   Map<String, dynamic> toJson() {
     return {
       'normalMin': normalMin,
@@ -32,6 +37,7 @@ class SensorThreshold {
   }
 }
 
+// Kelas untuk menyimpan data sensor
 class SensorData {
   final double suhu;
   final double ph;
@@ -41,6 +47,7 @@ class SensorData {
   final String sensorType;
   final double value;
 
+  // Konstruktor dengan parameter wajib
   const SensorData({
     required this.suhu,
     required this.ph,
@@ -51,6 +58,7 @@ class SensorData {
     required this.value,
   });
 
+  // Membuat instance dari JSON
   factory SensorData.fromJson(Map<String, dynamic> json) {
     return SensorData(
       suhu: (json['suhu'] as num).toDouble(),
@@ -63,6 +71,7 @@ class SensorData {
     );
   }
 
+  // Mengonversi ke format JSON
   Map<String, dynamic> toJson() {
     return {
       'suhu': suhu,
@@ -75,6 +84,7 @@ class SensorData {
     };
   }
 
+  // Mendapatkan status sensor berdasarkan ambang batas
   Map<String, SensorStatus> getStatusMap(Map<String, SensorThreshold> thresholds) {
     final statusMap = <String, SensorStatus>{};
 
@@ -101,6 +111,7 @@ class SensorData {
     return statusMap;
   }
 
+  // Menentukan status sensor berdasarkan nilai dan ambang batas
   SensorStatus _getStatus(double value, SensorThreshold threshold) {
     if (value >= threshold.normalMin && value <= threshold.normalMax) {
       return SensorStatus.normal;

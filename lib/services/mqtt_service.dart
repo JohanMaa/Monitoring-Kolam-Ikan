@@ -1,16 +1,34 @@
 import 'package:mqtt_client/mqtt_client.dart';
 import 'package:mqtt_client/mqtt_server_client.dart';
+import 'package:logger/logger.dart';
+import 'dart:async';
 import 'dart:convert';
+import 'dart:math';
 
+final logger = Logger();
+
+// Kelas untuk mengelola koneksi dan komunikasi MQTT
 class MqttService {
-  late MqttServerClient client;
+  MqttServerClient client;
   String broker = 'broker.emqx.io';
   int port = 1883;
   String topic = 'kolam_ikan/data';
   Function(Map<String, dynamic>)? onDataReceived;
   int reconnectAttempts = 0;
-  final int maxReconnectAttempts = 3;
+  final int maxReconnectAttempts = 5;
+  final _connectionStatusController =
+      StreamController<MqttConnectionState>.broadcast();
+  Stream<MqttConnectionState> get connectionStatus =>
+      _connectionStatusController.stream;
 
+  // Konstruktor untuk inisialisasi client MQTT
+  MqttService()
+      : client = MqttServerClient.withPort(
+            'broker.emqx.io',
+            'flutter_kolam_ikan_${DateTime.now().millisecondsSinceEpoch}',
+            1883);
+
+  // Mengatur konfigurasi broker, port, dan topik
   void setConfiguration({
     required String broker,
     required int port,
@@ -19,12 +37,21 @@ class MqttService {
     this.broker = broker;
     this.port = port;
     this.topic = topic;
+    client = MqttServerClient.withPort(
+        broker, 'flutter_kolam_ikan_${DateTime.now().millisecondsSinceEpoch}', port);
+    logger.i('MQTT configuration updated: broker=$broker, port=$port, topic=$topic');
   }
 
+  // Menghubungkan ke broker MQTT
   Future<void> connect() async {
+    if (client.connectionStatus!.state == MqttConnectionState.connected ||
+        client.connectionStatus!.state == MqttConnectionState.connecting) {
+      logger.d('Already connected or connecting, skipping connect attempt');
+      return;
+    }
+
     reconnectAttempts = 0;
-    client = MqttServerClient.withPort(broker, 'flutter_kolam_ikan', port);
-    client.logging(on: true); // Aktifkan logging untuk debugging
+    client.logging(on: true);
     client.keepAlivePeriod = 20;
     client.onConnected = onConnected;
     client.onDisconnected = onDisconnected;
@@ -38,76 +65,107 @@ class MqttService {
         .withWillQos(MqttQos.atLeastOnce);
 
     client.connectionMessage = connMessage;
+    _connectionStatusController.add(MqttConnectionState.connecting);
+    logger.d('Attempting to connect to MQTT broker: $broker:$port');
 
     try {
       await client.connect();
     } catch (e) {
-      print('MQTT Connection Error: $e');
-      disconnect();
+      logger.e('MQTT Connection Error: $e');
+      _connectionStatusController.add(MqttConnectionState.disconnected);
+      onDisconnected();
       return;
     }
 
     if (client.connectionStatus!.state == MqttConnectionState.connected) {
-      print('MQTT Connected');
       client.subscribe(topic, MqttQos.atMostOnce);
-
       client.updates!.listen((List<MqttReceivedMessage<MqttMessage?>>? event) {
         final recMess = event![0].payload as MqttPublishMessage;
-        final payload = MqttPublishPayload.bytesToStringAsString(recMess.payload.message);
-        print('Received message from topic "${event[0].topic}": $payload');
-
+        final payload =
+            MqttPublishPayload.bytesToStringAsString(recMess.payload.message);
         try {
           final decoded = jsonDecode(payload);
           if (decoded is Map<String, dynamic>) {
-            print('Decoded JSON data: $decoded');
             onDataReceived?.call(decoded);
           } else {
-            print('Error: Decoded data is not a JSON object, got: $decoded');
+            logger.w('Error: Decoded data is not a JSON object, got: $decoded');
           }
         } catch (e) {
-          print('Error decoding JSON: $e, Raw payload: $payload');
+          logger.e('Error decoding JSON: $e, Raw payload: $payload');
         }
       });
+      logger.i('Successfully subscribed to topic: $topic');
     } else {
-      print('MQTT Connection Failed - Status: ${client.connectionStatus}');
+      _connectionStatusController.add(MqttConnectionState.disconnected);
+      logger.e('MQTT Connection Failed - Status: ${client.connectionStatus}');
     }
   }
 
+  // Memutuskan koneksi dari broker
   void disconnect() {
-    if (client.connectionStatus?.state == MqttConnectionState.connected) {
+    if (client.connectionStatus!.state == MqttConnectionState.connected) {
       client.disconnect();
+      logger.i('Disconnected from MQTT broker');
+    } else {
+      logger.d('No active connection to disconnect');
     }
-    print('Disconnected from MQTT broker');
+    _connectionStatusController.add(MqttConnectionState.disconnected);
   }
 
+  // Callback saat koneksi berhasil
   void onConnected() {
-    print('Connected to MQTT broker');
+    reconnectAttempts = 0;
+    _connectionStatusController.add(MqttConnectionState.connected);
+    logger.i('Connected to MQTT broker');
   }
 
+  // Callback saat koneksi terputus
   void onDisconnected() {
-    print('Disconnected from MQTT broker');
+    if (client.connectionStatus!.state == MqttConnectionState.connected) return;
+    _connectionStatusController.add(MqttConnectionState.disconnected);
+    logger.w('Disconnected from MQTT broker');
     if (reconnectAttempts < maxReconnectAttempts) {
-      Future.delayed(const Duration(seconds: 5), () {
-        if (client.connectionStatus?.state != MqttConnectionState.connected) {
-          print('Attempting to reconnect... (Attempt ${reconnectAttempts + 1})');
+      final delaySeconds = min(pow(2, reconnectAttempts).toInt(), 32);
+      logger.i('Scheduling reconnect attempt ${reconnectAttempts + 1} in $delaySeconds seconds');
+      Future.delayed(Duration(seconds: delaySeconds), () {
+        if (client.connectionStatus!.state != MqttConnectionState.connected &&
+            client.connectionStatus!.state != MqttConnectionState.connecting) {
+          logger.i('Attempting to reconnect... (Attempt ${reconnectAttempts + 1})');
           reconnectAttempts++;
           connect();
         }
       });
     } else {
-      print('Max reconnect attempts reached. Please reconnect manually.');
+      logger.e('Max reconnect attempts reached. Please reconnect manually.');
     }
   }
 
+  // Callback saat berhasil berlangganan topik
   void onSubscribed(String topic) {
-    print('Subscribed to $topic');
+    logger.i('Subscribed to $topic');
   }
 
+  // Mengirim pesan ke topik MQTT
   Future<void> publish(String message) async {
+    if (client.connectionStatus!.state != MqttConnectionState.connected) {
+      logger.w('Cannot publish, client not connected');
+      return;
+    }
     final builder = MqttClientPayloadBuilder();
     builder.addString(message);
-
     client.publishMessage(topic, MqttQos.atLeastOnce, builder.payload!);
-    print('Published message: $message');
+    logger.i('Published message: $message');
+  }
+
+  // Mendapatkan status koneksi saat ini
+  MqttConnectionState getConnectionStatus() {
+    return client.connectionStatus?.state ?? MqttConnectionState.disconnected;
+  }
+
+  // Membersihkan sumber daya saat tidak digunakan
+  void dispose() {
+    logger.d('Disposing MqttService');
+    _connectionStatusController.close();
+    disconnect();
   }
 }

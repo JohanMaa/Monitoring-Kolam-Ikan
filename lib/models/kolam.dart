@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'sensor_data.dart';
 
+// Kelas untuk menyimpan data kolam
 class Kolam {
   String id;
   String name;
@@ -8,6 +9,7 @@ class Kolam {
   Map<String, SensorThreshold> thresholds;
   Map<String, SensorCardData> sensorData;
 
+  // Konstruktor dengan parameter wajib
   Kolam({
     required this.id,
     required this.name,
@@ -16,6 +18,7 @@ class Kolam {
     required this.sensorData,
   });
 
+  // Memperbarui data kartu sensor
   void updateSensorCards() {
     final statuses = getSensorStatuses() ?? {};
     sensorData = {
@@ -52,6 +55,7 @@ class Kolam {
     };
   }
 
+  // Menentukan warna berdasarkan status sensor
   Color getColorForStatus(SensorStatus status) {
     switch (status) {
       case SensorStatus.normal:
@@ -63,17 +67,19 @@ class Kolam {
     }
   }
 
+  // Membuat instance kolam baru
   factory Kolam.generate(String id, String name, {SensorData? initialData}) {
     // Gunakan initialData jika diberikan, jika tidak buat data dengan nilai 0
-    final sensorData = initialData ?? SensorData(
-      suhu: 0,
-      ph: 0,
-      dissolvedOxygen: 0,
-      berat: 0,
-      tinggiAir: 0,
-      sensorType: 'Suhu',
-      value: 0,
-    );
+    final sensorData = initialData ??
+        SensorData(
+          suhu: 0,
+          ph: 0,
+          dissolvedOxygen: 0,
+          berat: 0,
+          tinggiAir: 0,
+          sensorType: 'Suhu',
+          value: 0,
+        );
     return Kolam(
       id: id,
       name: name,
@@ -114,22 +120,26 @@ class Kolam {
     )..updateSensorCards();
   }
 
+  // Memperbarui data sensor
   void updateSensorData(SensorData newData) {
     data = newData;
     updateSensorCards();
   }
 
+  // Mendapatkan status sensor
   Map<String, SensorStatus>? getSensorStatuses() {
     return data.getStatusMap(thresholds);
   }
 }
 
+// Kelas untuk menyimpan data kartu sensor
 class SensorCardData {
   final Widget icon;
   final String label;
   final String value;
   final Color color;
 
+  // Konstruktor dengan parameter wajib
   SensorCardData({
     required this.icon,
     required this.label,
@@ -137,6 +147,7 @@ class SensorCardData {
     required this.color,
   });
 
+  // Membuat salinan dengan nilai tertentu
   SensorCardData copyWith({String? value, Color? color}) {
     return SensorCardData(
       icon: icon,
