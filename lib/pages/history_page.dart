@@ -57,14 +57,14 @@ class HistoryPageState extends State<HistoryPage> {
         .toList();
 
     return Scaffold(
-      appBar: AppBar(
-        title: const Text(
-          'Riwayat Data Sensor',
-          style: TextStyle(fontWeight: FontWeight.w600, color: Colors.white),
-        ),
-        backgroundColor: Colors.cyan,
-        elevation: 0,
-      ),
+      // appBar: AppBar(
+      //   title: const Text(
+      //     'Riwayat Data Sensor',
+      //     style: TextStyle(fontWeight: FontWeight.w600, color: Colors.white),
+      //   ),
+      //   backgroundColor: Colors.cyan,
+      //   elevation: 0,
+      // ),
       backgroundColor: Colors.grey.shade100,
       body: Column(
         children: [
@@ -463,20 +463,21 @@ class HistoryDetailPageState extends State<HistoryDetailPage> {
                   }).toList(),
                 ),
                 const SizedBox(height: 12),
+                // ignore: prefer_const_constructors
                 Row(
-                  children: [
-                    const Text('Tampilkan semua nilai:'),
-                    Switch(
-                      value: _showAllValues,
-                      onChanged: (value) {
-                        setState(() {
-                          _showAllValues = value;
-                          _currentPage = 1;
-                          _updateFilteredHistory();
-                        });
-                      },
-                    ),
-                  ],
+                  // children: [
+                  //   const Text('Tampilkan semua nilai:'),
+                  //   Switch(
+                  //     value: _showAllValues,
+                  //     onChanged: (value) {
+                  //       setState(() {
+                  //         _showAllValues = value;
+                  //         _currentPage = 1;
+                  //         _updateFilteredHistory();
+                  //       });
+                  //     },
+                  //   ),
+                  // ],
                 ),
               ],
             ),
