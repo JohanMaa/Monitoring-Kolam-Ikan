@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 import 'package:intl/intl.dart';
-import 'package:fluttertoast/fluttertoast.dart';
 
 // Konfigurasi sensor yang digunakan di kedua halaman
 const _sensorConfigs = [
@@ -17,6 +16,7 @@ class HistoryPage extends StatefulWidget {
   final List<Map<String, dynamic>> history;
   final Function(List<Map<String, dynamic>>) onHistoryChanged;
 
+  /// Konstruktor dengan parameter wajib untuk riwayat dan callback saat riwayat berubah.
   const HistoryPage({
     super.key,
     required this.history,
@@ -51,7 +51,7 @@ class _HistoryPageState extends State<HistoryPage> {
     }
   }
 
-  // Mengelompokkan riwayat berdasarkan nama kolam dan mengurutkan berdasarkan timestamp
+  /// Mengelompokkan riwayat berdasarkan nama kolam dan mengurutkan berdasarkan timestamp.
   void _updateGroupedHistory() {
     try {
       _cachedGroupedHistory = {};
@@ -59,27 +59,28 @@ class _HistoryPageState extends State<HistoryPage> {
         final kolamName = entry['kolamName'] as String? ?? 'Unknown';
         _cachedGroupedHistory!.putIfAbsent(kolamName, () => []).add(entry);
       }
-      // Urutkan setiap grup berdasarkan timestamp
       _cachedGroupedHistory!.forEach((key, value) {
         value.sort((a, b) {
-          final aTime = DateTime.tryParse(a['timestamp'] as String? ?? '') ?? DateTime.now();
-          final bTime = DateTime.tryParse(b['timestamp'] as String? ?? '') ?? DateTime.now();
+          final aTime = DateTime.tryParse(a['timestamp'] as String? ?? '');
+          final bTime = DateTime.tryParse(b['timestamp'] as String? ?? '');
+          if (aTime == null || bTime == null) return 0;
           return bTime.compareTo(aTime);
         });
       });
     } catch (e) {
-      Fluttertoast.showToast(
-        msg: 'Gagal memproses riwayat: $e',
-        toastLength: Toast.LENGTH_LONG,
-        gravity: ToastGravity.BOTTOM,
-        backgroundColor: Colors.red.shade700,
-        textColor: Colors.white,
-      );
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Gagal memproses riwayat: $e'),
+            backgroundColor: Colors.red.shade700,
+            duration: const Duration(seconds: 3),
+          ),
+        );
+      }
       _cachedGroupedHistory = {};
     }
   }
 
-  // Membangun UI halaman riwayat
   @override
   Widget build(BuildContext context) {
     final filteredKolams = _cachedGroupedHistory!.keys
@@ -88,37 +89,48 @@ class _HistoryPageState extends State<HistoryPage> {
 
     return Scaffold(
       appBar: AppBar(
+        automaticallyImplyLeading: false,
+        titleSpacing: 16,
         title: const Text(
           'Riwayat Data Sensor',
-          style: TextStyle(fontWeight: FontWeight.w600, color: Colors.white),
+          style: TextStyle(
+            fontWeight: FontWeight.w600,
+            fontSize: 20,
+            color: Colors.white,
+          ),
         ),
-        backgroundColor: Colors.cyan,
-        elevation: 0,
+        backgroundColor: Colors.cyan.shade600,
+        elevation: 3,
+        shadowColor: Colors.cyan.shade200.withOpacity(0.4),
         actions: [
           IconButton(
             icon: const Icon(Icons.refresh, color: Colors.white),
             onPressed: _refreshData,
+            tooltip: 'Segarkan Data',
+            splashRadius: 22,
           ),
+          const SizedBox(width: 8),
         ],
       ),
+
       backgroundColor: Colors.grey.shade100,
       body: Stack(
         children: [
           Column(
             children: [
               Padding(
-                padding: const EdgeInsets.all(16.0),
+                padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
                 child: TextField(
                   decoration: InputDecoration(
                     hintText: 'Cari nama kolam...',
                     prefixIcon: const Icon(Icons.search, color: Colors.cyan),
                     border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(12),
+                      borderRadius: BorderRadius.circular(14),
                       borderSide: BorderSide.none,
                     ),
                     filled: true,
                     fillColor: Colors.white,
-                    contentPadding: const EdgeInsets.symmetric(vertical: 0),
+                    contentPadding: const EdgeInsets.symmetric(vertical: 14, horizontal: 16),
                   ),
                   onChanged: (value) {
                     setState(() {
@@ -128,39 +140,46 @@ class _HistoryPageState extends State<HistoryPage> {
                 ),
               ),
               Expanded(
-                child: filteredKolams.isEmpty
-                    ? Center(
-                        child: Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Icon(
-                              FontAwesomeIcons.clockRotateLeft,
-                              size: 48,
-                              color: Colors.grey.shade400,
-                            ),
-                            const SizedBox(height: 16),
-                            Text(
-                              'Belum ada data riwayat.',
-                              style: TextStyle(
-                                fontSize: 16,
-                                color: Colors.grey.shade600,
-                                fontWeight: FontWeight.w500,
+                child: AnimatedSwitcher(
+                  duration: const Duration(milliseconds: 300),
+                  child: filteredKolams.isEmpty
+                      ? Center(
+                          key: const ValueKey('empty'),
+                          child: Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Icon(
+                                FontAwesomeIcons.clockRotateLeft,
+                                size: 50,
+                                color: Colors.grey.shade400,
                               ),
-                            ),
-                          ],
+                              const SizedBox(height: 16),
+                              Text(
+                                'Belum ada data riwayat.',
+                                style: TextStyle(
+                                  fontSize: 16,
+                                  color: Colors.grey.shade600,
+                                  fontWeight: FontWeight.w500,
+                                ),
+                              ),
+                            ],
+                          ),
+                        )
+                      : ListView.builder(
+                          key: const ValueKey('list'),
+                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                          itemCount: filteredKolams.length,
+                          itemBuilder: (context, index) {
+                            final kolamName = filteredKolams[index];
+                            final kolamHistory =
+                                _cachedGroupedHistory![kolamName]!.take(5).toList();
+                            return Padding(
+                              padding: const EdgeInsets.only(bottom: 12),
+                              child: _buildKolamCard(kolamName, kolamHistory),
+                            );
+                          },
                         ),
-                      )
-                    : ListView.builder(
-                        padding: const EdgeInsets.all(16),
-                        itemCount: filteredKolams.length,
-                        itemBuilder: (context, index) {
-                          final kolamName = filteredKolams[index];
-                          final kolamHistory =
-                              _cachedGroupedHistory![kolamName]!.take(5).toList();
-
-                          return _buildKolamCard(kolamName, kolamHistory);
-                        },
-                      ),
+                ),
               ),
             ],
           ),
@@ -176,7 +195,7 @@ class _HistoryPageState extends State<HistoryPage> {
     );
   }
 
-  // Membangun kartu untuk setiap kolam
+  /// Membangun kartu untuk setiap kolam dengan ringkasan riwayat.
   Widget _buildKolamCard(String kolamName, List<Map<String, dynamic>> kolamHistory) {
     return GestureDetector(
       onTap: () {
@@ -185,7 +204,9 @@ class _HistoryPageState extends State<HistoryPage> {
           PageRouteBuilder(
             pageBuilder: (context, animation, secondaryAnimation) => HistoryDetailPage(
               kolamName: kolamName,
-              history: kolamHistory,
+              history: _history
+                  .where((entry) => entry['kolamName'] == kolamName)
+                  .toList(),
               onHistoryChanged: (updatedHistory) {
                 setState(() {
                   _history = updatedHistory;
@@ -201,14 +222,16 @@ class _HistoryPageState extends State<HistoryPage> {
         );
       },
       child: Card(
-        elevation: 3,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        elevation: 2,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         margin: const EdgeInsets.symmetric(vertical: 8),
+        shadowColor: Colors.black12,
         child: Padding(
-          padding: const EdgeInsets.all(16),
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
+              // Header: Nama Kolam + Menu
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
@@ -230,7 +253,10 @@ class _HistoryPageState extends State<HistoryPage> {
                           context: context,
                           builder: (context) => AlertDialog(
                             title: const Text('Hapus Riwayat'),
-                            content: Text('Hapus semua riwayat untuk $kolamName?'),
+                            content: Text('Hapus semua riwayat untuk "$kolamName"?'),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(14),
+                            ),
                             actions: [
                               TextButton(
                                 onPressed: () => Navigator.pop(context),
@@ -239,22 +265,22 @@ class _HistoryPageState extends State<HistoryPage> {
                               TextButton(
                                 onPressed: () {
                                   setState(() {
-                                    _history.removeWhere(
-                                        (entry) => entry['kolamName'] == kolamName);
+                                    _history.removeWhere((entry) => entry['kolamName'] == kolamName);
                                     _updateGroupedHistory();
                                     widget.onHistoryChanged(_history);
                                   });
                                   Navigator.pop(context);
-                                  Fluttertoast.showToast(
-                                    msg: 'Riwayat untuk $kolamName dihapus',
-                                    toastLength: Toast.LENGTH_SHORT,
-                                    gravity: ToastGravity.BOTTOM,
-                                    backgroundColor: Colors.blue.shade600,
-                                    textColor: Colors.white,
-                                  );
+                                  if (mounted) {
+                                    ScaffoldMessenger.of(context).showSnackBar(
+                                      SnackBar(
+                                        content: Text('Riwayat untuk "$kolamName" dihapus'),
+                                        backgroundColor: Colors.red.shade400,
+                                        duration: const Duration(seconds: 2),
+                                      ),
+                                    );
+                                  }
                                 },
-                                child: const Text('Hapus',
-                                    style: TextStyle(color: Colors.red)),
+                                child: const Text('Hapus', style: TextStyle(color: Colors.red)),
                               ),
                             ],
                           ),
@@ -271,12 +297,20 @@ class _HistoryPageState extends State<HistoryPage> {
                   ),
                 ],
               ),
+
               const SizedBox(height: 8),
-              Text(
-                'Terakhir diperbarui: ${DateFormat('dd MMM yyyy, HH:mm:ss').format(DateTime.parse(kolamHistory.first['timestamp']).toLocal())}',
-                style: TextStyle(fontSize: 14, color: Colors.grey.shade600),
-              ),
+
+              // Waktu Terakhir Update
+              if (kolamHistory.isNotEmpty &&
+                  DateTime.tryParse(kolamHistory.first['timestamp'] as String? ?? '') != null)
+                Text(
+                  'Terakhir diperbarui: ${DateFormat('dd MMM yyyy, HH:mm:ss').format(DateTime.parse(kolamHistory.first['timestamp']).toLocal())}',
+                  style: TextStyle(fontSize: 13.5, color: Colors.grey.shade600),
+                ),
+
               const SizedBox(height: 12),
+
+              // Ringkasan Perubahan
               ...kolamHistory.asMap().entries.map((entry) {
                 final data = entry.value['data'] as Map<String, dynamic>;
                 final prevData = entry.key < kolamHistory.length - 1
@@ -288,10 +322,10 @@ class _HistoryPageState extends State<HistoryPage> {
                     : Padding(
                         padding: const EdgeInsets.only(bottom: 4),
                         child: Text(
-                          changes.join(', '),
+                          '• ${changes.join(', ')}',
                           style: TextStyle(
-                            fontSize: 12,
-                            color: Colors.grey.shade700,
+                            fontSize: 13,
+                            color: Colors.grey.shade800,
                           ),
                         ),
                       );
@@ -303,7 +337,7 @@ class _HistoryPageState extends State<HistoryPage> {
     );
   }
 
-  // Mendapatkan perubahan sensor antara data saat ini dan sebelumnya
+  /// Mendapatkan perubahan sensor antara data saat ini dan sebelumnya.
   List<String> _getSensorChanges(Map<String, dynamic> data, Map<String, dynamic>? prevData) {
     final changes = <String>[];
     if (prevData == null) return changes;
@@ -311,30 +345,48 @@ class _HistoryPageState extends State<HistoryPage> {
       final key = sensor['key'] as String;
       if (data[key] != prevData[key]) {
         changes.add(
-            '${sensor['label']}: ${prevData[key]}${sensor['unit']} → ${data[key]}${sensor['unit']}');
+            '${sensor['label']}: ${prevData[key] ?? '-'}${sensor['unit']} → ${data[key] ?? '-'}${sensor['unit']}');
       }
     }
     return changes;
   }
 
-  // Menyegarkan data (placeholder, harus diimplementasikan dengan sumber data nyata)
+  /// Menyegarkan data riwayat dari sumber data (misalnya, MQTT).
   Future<void> _refreshData() async {
     setState(() {
       _isLoading = true;
     });
-    // Simulasi pengambilan data baru
-    await Future.delayed(const Duration(seconds: 1));
-    setState(() {
-      _isLoading = false;
-      _updateGroupedHistory();
-    });
-    Fluttertoast.showToast(
-      msg: 'Data riwayat diperbarui',
-      toastLength: Toast.LENGTH_SHORT,
-      gravity: ToastGravity.BOTTOM,
-      backgroundColor: Colors.green.shade600,
-      textColor: Colors.white,
-    );
+    try {
+      // TODO: Implementasikan pengambilan data dari MQTT atau sumber lain
+      // Contoh: final newData = await mqttService.fetchHistory();
+      await Future.delayed(const Duration(seconds: 1));
+      setState(() {
+        _updateGroupedHistory();
+      });
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Data riwayat diperbarui'),
+            backgroundColor: Colors.green,
+            duration: Duration(seconds: 2),
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Gagal memperbarui data: $e'),
+            backgroundColor: Colors.red.shade700,
+            duration: const Duration(seconds: 3),
+          ),
+        );
+      }
+    } finally {
+      setState(() {
+        _isLoading = false;
+      });
+    }
   }
 }
 
@@ -344,6 +396,7 @@ class HistoryDetailPage extends StatefulWidget {
   final List<Map<String, dynamic>> history;
   final Function(List<Map<String, dynamic>>) onHistoryChanged;
 
+  /// Konstruktor untuk halaman detail riwayat.
   const HistoryDetailPage({
     super.key,
     required this.kolamName,
@@ -364,6 +417,7 @@ class _HistoryDetailPageState extends State<HistoryDetailPage> {
   final int _itemsPerPage = 50;
   List<Map<String, dynamic>>? _cachedFilteredHistory;
   bool _isLoading = false;
+  bool _isLoadingMore = false;
 
   @override
   void initState() {
@@ -372,7 +426,7 @@ class _HistoryDetailPageState extends State<HistoryDetailPage> {
     _updateFilteredHistory();
   }
 
-  // Memperbarui riwayat yang difilter berdasarkan tanggal dan sensor
+  /// Memperbarui riwayat yang difilter berdasarkan tanggal dan sensor.
   void _updateFilteredHistory() {
     setState(() {
       _isLoading = true;
@@ -421,18 +475,21 @@ class _HistoryDetailPageState extends State<HistoryDetailPage> {
           })
           .toList()
         ..sort((a, b) {
-          final aTime = DateTime.tryParse(a['timestamp'] as String? ?? '') ?? DateTime.now();
-          final bTime = DateTime.tryParse(b['timestamp'] as String? ?? '') ?? DateTime.now();
+          final aTime = DateTime.tryParse(a['timestamp'] as String? ?? '');
+          final bTime = DateTime.tryParse(b['timestamp'] as String? ?? '');
+          if (aTime == null || bTime == null) return 0;
           return bTime.compareTo(aTime);
         });
     } catch (e) {
-      Fluttertoast.showToast(
-        msg: 'Gagal memfilter riwayat: $e',
-        toastLength: Toast.LENGTH_LONG,
-        gravity: ToastGravity.BOTTOM,
-        backgroundColor: Colors.red.shade700,
-        textColor: Colors.white,
-      );
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Gagal memfilter riwayat: $e'),
+            backgroundColor: Colors.red.shade700,
+            duration: const Duration(seconds: 3),
+          ),
+        );
+      }
       _cachedFilteredHistory = [];
     } finally {
       setState(() {
@@ -446,169 +503,267 @@ class _HistoryDetailPageState extends State<HistoryDetailPage> {
     final displayedHistory = _cachedFilteredHistory!.take(_currentPage * _itemsPerPage).toList();
 
     return Scaffold(
-      appBar: AppBar(
-        title: Hero(
-          tag: 'kolam_${widget.kolamName}',
-          child: Text(
-            'Riwayat ${widget.kolamName}',
-            style: const TextStyle(fontWeight: FontWeight.w600, color: Colors.white),
-          ),
-        ),
-        backgroundColor: Colors.cyan,
-        elevation: 0,
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back, color: Colors.white),
-          onPressed: () => Navigator.pop(context),
-        ),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.refresh, color: Colors.white),
-            onPressed: _refreshData,
-          ),
-        ],
-      ),
-      backgroundColor: Colors.grey.shade100,
-      body: Stack(
-        children: [
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Padding(
-                padding: const EdgeInsets.all(16.0),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    DropdownButton<String>(
-                      value: _selectedDateFilter,
-                      isExpanded: true,
-                      items: [
-                        'Semua',
-                        'Hari Ini',
-                        'Kemarin',
-                        'Minggu Ini',
-                        'Bulan Ini'
-                      ].map((filter) => DropdownMenuItem(value: filter, child: Text(filter))).toList(),
-                      onChanged: (value) {
-                        setState(() {
-                          _selectedDateFilter = value!;
-                          _currentPage = 1;
-                          _updateFilteredHistory();
-                        });
-                      },
-                    ),
-                    const SizedBox(height: 12),
-                    Wrap(
-                      spacing: 8,
-                      children: _sensorConfigs.map((sensor) {
-                        return FilterChip(
-                          label: Text(sensor['label'] as String),
-                          selected: _selectedSensors.contains(sensor['key']),
-                          onSelected: (selected) {
-                            setState(() {
-                              final key = sensor['key'] as String;
-                              if (selected) {
-                                _selectedSensors.add(key);
-                              } else {
-                                _selectedSensors.remove(key);
-                              }
-                              _currentPage = 1;
-                              _updateFilteredHistory();
-                            });
-                          },
-                        );
-                      }).toList(),
-                    ),
-                    const SizedBox(height: 12),
-                    Row(
-                      children: [
-                        const Text('Tampilkan semua nilai:'),
-                        Switch(
-                          value: _showAllValues,
-                          onChanged: (value) {
-                            setState(() {
-                              _showAllValues = value;
-                              _currentPage = 1;
-                              _updateFilteredHistory();
-                            });
-                          },
-                        ),
-                      ],
-                    ),
-                  ],
+      backgroundColor: Colors.grey.shade50,
+      body: CustomScrollView(
+        slivers: [
+          SliverAppBar(
+            backgroundColor: Colors.cyan.shade600,
+            pinned: true,
+            expandedHeight: 120.0,
+            elevation: 4,
+            shadowColor: Colors.cyan.shade200.withOpacity(0.3),
+            leading: Padding(
+              padding: const EdgeInsets.only(left: 8),
+              child: IconButton(
+                icon: const Icon(Icons.arrow_back, color: Colors.white),
+                onPressed: () => Navigator.pop(context),
+                tooltip: 'Kembali',
+                splashRadius: 22,
+              ),
+            ),
+            actions: [
+              IconButton(
+                icon: const Icon(Icons.refresh, color: Colors.white),
+                onPressed: _refreshData,
+                tooltip: 'Segarkan Data',
+                splashRadius: 22,
+              ),
+              const SizedBox(width: 8),
+            ],
+            flexibleSpace: FlexibleSpaceBar(
+              titlePadding: const EdgeInsets.only(left: 56, bottom: 16),
+              title: Hero(
+                tag: 'kolam_${widget.kolamName}',
+                child: Text(
+                  'Riwayat ${widget.kolamName}',
+                  style: const TextStyle(
+                    fontWeight: FontWeight.w600,
+                    color: Colors.white,
+                    fontSize: 18,
+                  ),
+                  overflow: TextOverflow.ellipsis,
                 ),
               ),
-              Expanded(
-                child: displayedHistory.isEmpty
-                    ? Center(
-                        child: Text(
+            ),
+          ),
+
+          SliverToBoxAdapter(
+            child: Padding(
+              padding: const EdgeInsets.all(16.0),
+              child: Card(
+                elevation: 2,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                child: Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text(
+                        'Filter Riwayat',
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w600,
+                          color: Colors.black87,
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      DropdownButtonFormField<String>(
+                        value: _selectedDateFilter,
+                        decoration: const InputDecoration(
+                          labelText: 'Periode Waktu',
+                          border: OutlineInputBorder(),
+                          prefixIcon: Icon(Icons.calendar_today, color: Colors.cyan),
+                        ),
+                        items: [
+                          'Semua',
+                          'Hari Ini',
+                          'Kemarin',
+                          'Minggu Ini',
+                          'Bulan Ini'
+                        ].map((filter) {
+                          return DropdownMenuItem(value: filter, child: Text(filter));
+                        }).toList(),
+                        onChanged: (value) {
+                          setState(() {
+                            _selectedDateFilter = value!;
+                            _currentPage = 1;
+                            _updateFilteredHistory();
+                          });
+                        },
+                      ),
+                      const SizedBox(height: 16),
+                      const Text(
+                        'Pilih Sensor',
+                        style: TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w500,
+                          color: Colors.black87,
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      Wrap(
+                        spacing: 8,
+                        children: _sensorConfigs.map((sensor) {
+                          final key = sensor['key'] as String;
+                          return FilterChip(
+                            label: Text(sensor['label'] as String),
+                            selected: _selectedSensors.contains(key),
+                            selectedColor: Colors.cyan.withOpacity(0.2),
+                            checkmarkColor: Colors.cyan,
+                            labelStyle: TextStyle(
+                              color: _selectedSensors.contains(key)
+                                  ? Colors.cyan
+                                  : Colors.black87,
+                            ),
+                            onSelected: (selected) {
+                              setState(() {
+                                if (selected) {
+                                  _selectedSensors.add(key);
+                                } else {
+                                  _selectedSensors.remove(key);
+                                }
+                                _currentPage = 1;
+                                _updateFilteredHistory();
+                              });
+                            },
+                          );
+                        }).toList(),
+                      ),
+                      const SizedBox(height: 16),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          const Text(
+                            'Tampilkan Semua Nilai',
+                            style: TextStyle(
+                              fontSize: 14,
+                              fontWeight: FontWeight.w500,
+                              color: Colors.black87,
+                            ),
+                          ),
+                          Switch(
+                            value: _showAllValues,
+                            activeColor: Colors.cyan,
+                            onChanged: (value) {
+                              setState(() {
+                                _showAllValues = value;
+                                _currentPage = 1;
+                                _updateFilteredHistory();
+                              });
+                            },
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ),
+          displayedHistory.isEmpty
+              ? SliverFillRemaining(
+                  child: Center(
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(
+                          FontAwesomeIcons.database,
+                          size: 48,
+                          color: Colors.grey.shade400,
+                        ),
+                        const SizedBox(height: 16),
+                        Text(
                           'Tidak ada riwayat untuk ${widget.kolamName}.',
                           style: TextStyle(
                             fontSize: 16,
                             color: Colors.grey.shade600,
                             fontWeight: FontWeight.w500,
                           ),
+                          textAlign: TextAlign.center,
                         ),
-                      )
-                    : ListView.builder(
-                        padding: const EdgeInsets.all(16),
-                        itemCount: displayedHistory.length +
-                            (_cachedFilteredHistory!.length > displayedHistory.length ? 1 : 0),
-                        itemBuilder: (context, index) {
-                          if (index == displayedHistory.length &&
-                              _cachedFilteredHistory!.length > displayedHistory.length) {
-                            return Padding(
-                              padding: const EdgeInsets.symmetric(vertical: 8),
-                              child: ElevatedButton(
-                                onPressed: () {
-                                  setState(() {
-                                    _currentPage++;
-                                  });
-                                },
-                                style: ElevatedButton.styleFrom(
-                                  backgroundColor: Colors.cyan,
-                                  shape: RoundedRectangleBorder(
-                                    borderRadius: BorderRadius.circular(12),
+                      ],
+                    ),
+                  ),
+                )
+              : SliverList(
+                  delegate: SliverChildBuilderDelegate(
+                    (context, index) {
+                      if (index == displayedHistory.length &&
+                          _cachedFilteredHistory!.length > displayedHistory.length) {
+                        return Padding(
+                          padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 16),
+                          child: _isLoadingMore
+                              ? const Center(
+                                  child: CircularProgressIndicator(color: Colors.cyan),
+                                )
+                              : ElevatedButton.icon(
+                                  onPressed: () async {
+                                    setState(() {
+                                      _isLoadingMore = true;
+                                    });
+                                    await Future.delayed(const Duration(milliseconds: 500));
+                                    setState(() {
+                                      _currentPage++;
+                                      _isLoadingMore = false;
+                                    });
+                                  },
+                                  icon: const Icon(Icons.expand_more, color: Colors.white),
+                                  label: const Text('Muat Lebih Banyak'),
+                                  style: ElevatedButton.styleFrom(
+                                    backgroundColor: Colors.cyan,
+                                    foregroundColor: Colors.white,
+                                    padding: const EdgeInsets.symmetric(vertical: 12),
+                                    shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(12),
+                                    ),
                                   ),
                                 ),
-                                child: const Text('Muat Lebih Banyak'),
-                              ),
-                            );
-                          }
-
-                          final entry = displayedHistory[index];
-                          return _buildHistoryCard(entry, index, displayedHistory);
-                        },
-                      ),
-              ),
-            ],
-          ),
-          if (_isLoading)
-            Container(
-              color: Colors.black.withOpacity(0.3),
-              child: const Center(
-                child: CircularProgressIndicator(color: Colors.cyan),
-              ),
-            ),
+                        );
+                      }
+                      final entry = displayedHistory[index];
+                      return AnimatedOpacity(
+                        opacity: 1.0,
+                        duration: const Duration(milliseconds: 300),
+                        child: _buildHistoryCard(entry, index),
+                      );
+                    },
+                    childCount: displayedHistory.length +
+                        (_cachedFilteredHistory!.length > displayedHistory.length ? 1 : 0),
+                  ),
+                ),
         ],
       ),
+      floatingActionButton: _cachedFilteredHistory!.isNotEmpty
+          ? FloatingActionButton(
+              onPressed: () {
+                Scrollable.ensureVisible(
+                  context,
+                  duration: const Duration(milliseconds: 500),
+                  curve: Curves.easeInOut,
+                );
+              },
+              backgroundColor: Colors.cyan,
+              child: const Icon(Icons.arrow_upward, color: Colors.white),
+              tooltip: 'Kembali ke Atas',
+            )
+          : null,
     );
   }
 
-  // Membangun kartu untuk setiap entri riwayat
-  Widget _buildHistoryCard(
-      Map<String, dynamic> entry, int index, List<Map<String, dynamic>> displayedHistory) {
+  /// Membangun kartu untuk setiap entri riwayat.
+  Widget _buildHistoryCard(Map<String, dynamic> entry, int index) {
     final data = entry['data'] as Map<String, dynamic>? ?? {};
     final timestamp = DateTime.tryParse(entry['timestamp'] as String? ?? '');
-    final formattedDate = DateFormat('dd MMM yyyy, HH:mm:ss')
-        .format(timestamp ?? DateTime.now().toLocal());
-    final prevData = index < displayedHistory.length - 1
-        ? displayedHistory[index + 1]['data'] as Map<String, dynamic>?
-        : null;
+    if (timestamp == null) return const SizedBox.shrink();
+    final formattedDate = DateFormat('dd MMM yyyy, HH:mm:ss').format(timestamp.toLocal());
+    final prevEntry = index < _history.length - 1 ? _history[index + 1] : null;
+    final prevData =
+        prevEntry != null ? prevEntry['data'] as Map<String, dynamic>? : null;
 
     return Card(
       elevation: 3,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-      margin: const EdgeInsets.symmetric(vertical: 8),
+      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
       child: Padding(
         padding: const EdgeInsets.all(16),
         child: Column(
@@ -617,22 +772,28 @@ class _HistoryDetailPageState extends State<HistoryDetailPage> {
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Text(
-                  formattedDate,
-                  style: TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.w600,
-                    color: Colors.cyan.shade700,
+                Flexible(
+                  child: Text(
+                    formattedDate,
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w600,
+                      color: Colors.cyan.shade700,
+                    ),
+                    overflow: TextOverflow.ellipsis,
                   ),
                 ),
                 IconButton(
-                  icon: const Icon(Icons.delete, color: Colors.red),
+                  icon: const Icon(FontAwesomeIcons.trash, color: Colors.red),
                   onPressed: () {
                     showDialog(
                       context: context,
                       builder: (context) => AlertDialog(
                         title: const Text('Hapus Entri Riwayat'),
                         content: const Text('Hapus entri riwayat ini?'),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
                         actions: [
                           TextButton(
                             onPressed: () => Navigator.pop(context),
@@ -646,25 +807,30 @@ class _HistoryDetailPageState extends State<HistoryDetailPage> {
                                 widget.onHistoryChanged(_history);
                               });
                               Navigator.pop(context);
-                              Fluttertoast.showToast(
-                                msg: 'Entri riwayat dihapus',
-                                toastLength: Toast.LENGTH_SHORT,
-                                gravity: ToastGravity.BOTTOM,
-                                backgroundColor: Colors.blue.shade600,
-                                textColor: Colors.white,
-                              );
+                              if (mounted) {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  const SnackBar(
+                                    content: Text('Entri riwayat dihapus'),
+                                    backgroundColor: Colors.blue,
+                                    duration: Duration(seconds: 2),
+                                  ),
+                                );
+                              }
                             },
-                            child:
-                                const Text('Hapus', style: TextStyle(color: Colors.red)),
+                            child: const Text(
+                              'Hapus',
+                              style: TextStyle(color: Colors.red),
+                            ),
                           ),
                         ],
                       ),
                     );
                   },
+                  tooltip: 'Hapus Entri',
                 ),
               ],
             ),
-            const SizedBox(height: 12),
+            const Divider(height: 16, thickness: 1),
             ..._sensorConfigs.map((sensor) {
               final key = sensor['key'] as String;
               if (!_showAllValues &&
@@ -726,23 +892,41 @@ class _HistoryDetailPageState extends State<HistoryDetailPage> {
     );
   }
 
-  // Menyegarkan data (placeholder, harus diimplementasikan dengan sumber data nyata)
+  /// Menyegarkan data riwayat dari sumber data (misalnya, MQTT).
   Future<void> _refreshData() async {
     setState(() {
       _isLoading = true;
     });
-    // Simulasi pengambilan data baru
-    await Future.delayed(const Duration(seconds: 1));
-    setState(() {
-      _isLoading = false;
-      _updateFilteredHistory();
-    });
-    Fluttertoast.showToast(
-      msg: 'Data riwayat diperbarui',
-      toastLength: Toast.LENGTH_SHORT,
-      gravity: ToastGravity.BOTTOM,
-      backgroundColor: Colors.green.shade600,
-      textColor: Colors.white,
-    );
+    try {
+      // TODO: Implementasikan pengambilan data dari MQTT atau sumber lain
+      // Contoh: final newData = await mqttService.fetchHistory();
+      await Future.delayed(const Duration(seconds: 1));
+      setState(() {
+        _updateFilteredHistory();
+      });
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Data riwayat diperbarui'),
+            backgroundColor: Colors.green,
+            duration: Duration(seconds: 2),
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Gagal memperbarui data: $e'),
+            backgroundColor: Colors.red.shade700,
+            duration: const Duration(seconds: 3),
+          ),
+        );
+      }
+    } finally {
+      setState(() {
+        _isLoading = false;
+      });
+    }
   }
 }

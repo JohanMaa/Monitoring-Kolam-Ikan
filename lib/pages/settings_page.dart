@@ -344,7 +344,7 @@ class SettingsPageState extends State<SettingsPage> {
         ListTile(
           leading: Icon(Icons.update),
           title: Text("Versi"),
-          subtitle: Text("1.0.0"),
+          subtitle: Text("1.1.0"),
         ),
         ListTile(
           leading: Icon(Icons.people),

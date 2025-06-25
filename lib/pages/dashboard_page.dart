@@ -685,7 +685,6 @@ class DashboardPageState extends State<DashboardPage>
             return ConnectionPage(
               mqttService: mqttService,
               onConnected: () => setState(() {}),
-              connectionStatus: snapshot.data ?? MqttConnectionState.disconnected,
             );
           },
         ),
