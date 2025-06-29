@@ -97,16 +97,16 @@ class SensorData {
     statusMap['ph'] = _getStatus(ph, phThreshold);
 
     // Dissolved Oxygen (DO)
-    final doThreshold = thresholds['do']!;
-    statusMap['do'] = _getStatus(dissolvedOxygen, doThreshold);
+    final doThreshold = thresholds['dissolvedOxygen']!;
+    statusMap['dissolvedOxygen'] = _getStatus(dissolvedOxygen, doThreshold);
 
     // Berat
     final beratThreshold = thresholds['berat']!;
     statusMap['berat'] = _getStatus(berat, beratThreshold);
 
     // Tinggi Air
-    final tinggiAirThreshold = thresholds['tinggi_air']!;
-    statusMap['tinggi_air'] = _getStatus(tinggiAir, tinggiAirThreshold);
+    final tinggiAirThreshold = thresholds['tinggiAir']!;
+    statusMap['tinggiAir'] = _getStatus(tinggiAir, tinggiAirThreshold);
 
     return statusMap;
   }

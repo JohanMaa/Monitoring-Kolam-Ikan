@@ -1,5 +1,3 @@
-// ignore_for_file: cast_from_null_always_fails, avoid_print, prefer_const_constructors
-
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:font_awesome_flutter/font_awesome_flutter.dart';
@@ -13,7 +11,7 @@ import 'package:monitoring_kolam_ikan/pages/settings_page.dart';
 import 'package:monitoring_kolam_ikan/pages/connection_page.dart';
 import 'package:monitoring_kolam_ikan/pages/history_page.dart';
 import 'package:monitoring_kolam_ikan/services/default_threshold.dart';
-import 'dart:async';
+import 'package:monitoring_kolam_ikan/services/settings_service.dart';
 import 'dart:convert';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -26,20 +24,15 @@ class DashboardPage extends StatefulWidget {
 }
 
 // State untuk mengelola logika dashboard
-class DashboardPageState extends State<DashboardPage>
-    with SingleTickerProviderStateMixin {
+class DashboardPageState extends State<DashboardPage> with SingleTickerProviderStateMixin {
   late MqttService mqttService;
   int _selectedIndex = 0;
   List<Kolam> kolams = [];
-  final ValueNotifier<List<Map<String, dynamic>>> historyNotifier =
-      ValueNotifier<List<Map<String, dynamic>>>([]);
+  final ValueNotifier<List<Map<String, dynamic>>> historyNotifier = ValueNotifier<List<Map<String, dynamic>>>([]);
   final GlobalKey<AnimatedListState> _listKey = GlobalKey<AnimatedListState>();
   Map<String, SensorThreshold> thresholds = defaultThresholds;
   Map<String, DateTime> lastUpdateTimes = {};
   Map<String, DateTime> lastNotificationTimes = {};
-  Timer? _saveKolamsTimer;
-  Timer? _saveHistoryTimer;
-  final Duration debounceDuration = const Duration(seconds: 5);
   final Duration notificationCooldown = const Duration(seconds: 30);
 
   // Inisialisasi state dan koneksi MQTT
@@ -48,13 +41,30 @@ class DashboardPageState extends State<DashboardPage>
     super.initState();
     mqttService = MqttService();
     mqttService.onDataReceived = updateSensorData;
+    SettingsService.thresholdsNotifier.addListener(_onThresholdsChanged);
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       await _loadKolams();
       await _loadHistory();
+      thresholds = await SettingsService.getThresholds();
+      for (var kolam in kolams) {
+        kolam.thresholds = thresholds;
+        kolam.updateSensorCards();
+      }
       if (kolams.isEmpty) {
         _initialKolam();
       }
       mqttService.connect();
+    });
+  }
+
+  // Callback untuk perubahan thresholds
+  void _onThresholdsChanged() {
+    setState(() {
+      thresholds = SettingsService.thresholdsNotifier.value;
+      for (var kolam in kolams) {
+        kolam.thresholds = thresholds;
+        kolam.updateSensorCards();
+      }
     });
   }
 
@@ -78,16 +88,17 @@ class DashboardPageState extends State<DashboardPage>
           }).toList();
         });
       } catch (e) {
-        print('Error loading kolams: $e');
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Gagal memuat data kolam: $e')),
+        );
       }
     }
   }
 
   // Menyimpan daftar kolam ke penyimpanan
   Future<void> _saveKolams() async {
-    _saveKolamsTimer?.cancel();
-    _saveKolamsTimer = Timer(debounceDuration, () async {
-      final prefs = await SharedPreferences.getInstance();
+    final prefs = await SharedPreferences.getInstance();
+    try {
       final kolamsJson = kolams
           .map((kolam) => {
                 'id': kolam.id,
@@ -104,8 +115,11 @@ class DashboardPageState extends State<DashboardPage>
               })
           .toList();
       await prefs.setString('kolams', jsonEncode(kolamsJson));
-      print('Saved kolams: ${kolams.map((k) => k.name).toList()}');
-    });
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Gagal menyimpan data kolam: $e')),
+      );
+    }
   }
 
   // Memuat riwayat dari penyimpanan
@@ -114,23 +128,26 @@ class DashboardPageState extends State<DashboardPage>
     final String? historyJson = prefs.getString('history');
     if (historyJson != null) {
       try {
-        final List<Map<String, dynamic>> loadedHistory =
-            List<Map<String, dynamic>>.from(jsonDecode(historyJson));
+        final List<Map<String, dynamic>> loadedHistory = List<Map<String, dynamic>>.from(jsonDecode(historyJson));
         historyNotifier.value = loadedHistory;
       } catch (e) {
-        print('Error loading history: $e');
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Gagal memuat riwayat: $e')),
+        );
       }
     }
   }
 
   // Menyimpan riwayat ke penyimpanan
   Future<void> _saveHistory() async {
-    _saveHistoryTimer?.cancel();
-    _saveHistoryTimer = Timer(debounceDuration, () async {
-      final prefs = await SharedPreferences.getInstance();
+    final prefs = await SharedPreferences.getInstance();
+    try {
       await prefs.setString('history', jsonEncode(historyNotifier.value));
-      print('Saved history: ${historyNotifier.value.length} entries');
-    });
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Gagal menyimpan riwayat: $e')),
+      );
+    }
   }
 
   // Inisialisasi kolam awal
@@ -145,8 +162,7 @@ class DashboardPageState extends State<DashboardPage>
         sensorType: 'Suhu',
         value: 0,
       );
-      final newKolam =
-          Kolam.generate('initial_kolam', 'Kolam 1', initialData: initialData);
+      final newKolam = Kolam.generate('initial_kolam', 'Kolam 1', initialData: initialData);
       kolams.add(newKolam);
       _saveKolams();
     });
@@ -181,7 +197,6 @@ class DashboardPageState extends State<DashboardPage>
     final kolamName = data['kolam'] as String?;
     final kolamId = data['id'] as String?;
     if (kolamName == null && kolamId == null) {
-      print('No kolam name or id in data: $data');
       return;
     }
 
@@ -190,12 +205,10 @@ class DashboardPageState extends State<DashboardPage>
         Kolam? targetKolam;
 
         if (kolamId != null) {
-          targetKolam = kolams.firstWhere((kolam) => kolam.id == kolamId,
-              orElse: () => null as Kolam);
+          targetKolam = kolams.firstWhere((kolam) => kolam.id == kolamId, orElse: () => null as Kolam);
         }
         if (targetKolam == null && kolamName != null) {
-          targetKolam = kolams.firstWhere((kolam) => kolam.name == kolamName,
-              orElse: () => null as Kolam);
+          targetKolam = kolams.firstWhere((kolam) => kolam.name == kolamName, orElse: () => null as Kolam);
         }
 
         if (targetKolam == null && (kolamName != null || kolamId != null)) {
@@ -218,7 +231,6 @@ class DashboardPageState extends State<DashboardPage>
             duration: const Duration(milliseconds: 500),
           );
           _saveKolams();
-          print('Created new kolam: ${targetKolam.name} (ID: ${targetKolam.id})');
         }
 
         if (targetKolam != null) {
@@ -226,12 +238,9 @@ class DashboardPageState extends State<DashboardPage>
           final newData = SensorData(
             suhu: (data['suhu'] as num?)?.toDouble() ?? oldData.suhu,
             ph: (data['ph'] as num?)?.toDouble() ?? oldData.ph,
-            dissolvedOxygen:
-                (data['do'] as num?)?.toDouble() ?? oldData.dissolvedOxygen,
-            berat:
-                (data['berat_pakan'] as num?)?.toDouble() ?? oldData.berat,
-            tinggiAir:
-                (data['level_air'] as num?)?.toDouble() ?? oldData.tinggiAir,
+            dissolvedOxygen: (data['do'] as num?)?.toDouble() ?? oldData.dissolvedOxygen,
+            berat: (data['berat_pakan'] as num?)?.toDouble() ?? oldData.berat,
+            tinggiAir: (data['level_air'] as num?)?.toDouble() ?? oldData.tinggiAir,
             sensorType: data['sensorType'] as String? ?? oldData.sensorType,
             value: (data['value'] as num?)?.toDouble() ?? oldData.value,
           );
@@ -266,9 +275,7 @@ class DashboardPageState extends State<DashboardPage>
                               ? '%'
                               : '';
               final value = newData.toJson()[sensor].toString();
-              final statusLabel = newSensorStatus == SensorStatus.kritis
-                  ? 'kritis'
-                  : 'darurat';
+              final statusLabel = newSensorStatus == SensorStatus.kritis ? 'kritis' : 'darurat';
               _showNotification(
                 'Peringatan: $sensorLabel di ${targetKolam.name} $statusLabel ($value$unit)!',
                 newSensorStatus,
@@ -282,17 +289,10 @@ class DashboardPageState extends State<DashboardPage>
               oldData.dissolvedOxygen != newData.dissolvedOxygen ||
               oldData.berat != newData.berat ||
               oldData.tinggiAir != newData.tinggiAir) {
-            final kolamHistory = historyNotifier.value
-                .where((entry) => entry['kolamName'] == targetKolam!.name)
-                .toList();
+            final kolamHistory = historyNotifier.value.where((entry) => entry['kolamName'] == targetKolam!.name).toList();
             if (kolamHistory.length >= 1000) {
-              final oldestEntry = kolamHistory.reduce((a, b) => DateTime.parse(
-                      a['timestamp'])
-                  .isBefore(DateTime.parse(b['timestamp']))
-                  ? a
-                  : b);
-              historyNotifier.value = List.from(historyNotifier.value)
-                ..remove(oldestEntry);
+              final oldestEntry = kolamHistory.reduce((a, b) => DateTime.parse(a['timestamp']).isBefore(DateTime.parse(b['timestamp'])) ? a : b);
+              historyNotifier.value = List.from(historyNotifier.value)..remove(oldestEntry);
             }
 
             historyNotifier.value = [
@@ -313,18 +313,18 @@ class DashboardPageState extends State<DashboardPage>
               },
             ];
             _saveHistory();
-            print(
-                'History updated for ${targetKolam.name} (ID: ${targetKolam.id}): ${historyNotifier.value.length} entries');
           }
 
           targetKolam.data = newData;
           lastUpdateTimes[targetKolam.name] = DateTime.now();
           targetKolam.updateSensorCards();
-          _saveKolams();
+          _saveKolams(); // Simpan langsung tanpa Timer
         }
       });
     } catch (e) {
-      print('Error updating sensor data: $e');
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Gagal memperbarui data sensor: $e')),
+      );
     }
   }
 
@@ -343,9 +343,7 @@ class DashboardPageState extends State<DashboardPage>
         sensorType: 'Suhu',
         value: 0,
       );
-      final Kolam newKolam =
-          Kolam.generate(kolamId, kolamName, initialData: initialData);
-
+      final Kolam newKolam = Kolam.generate(kolamId, kolamName, initialData: initialData);
       setState(() {
         kolams.add(newKolam);
       });
@@ -454,19 +452,15 @@ class DashboardPageState extends State<DashboardPage>
                   kolam.data = SensorData(
                     suhu: (data['suhu'] as num?)?.toDouble() ?? kolam.data.suhu,
                     ph: (data['ph'] as num?)?.toDouble() ?? kolam.data.ph,
-                    dissolvedOxygen: (data['do'] as num?)?.toDouble() ??
-                        kolam.data.dissolvedOxygen,
-                    berat: (data['berat_pakan'] as num?)?.toDouble() ??
-                        kolam.data.berat,
-                    tinggiAir: (data['level_air'] as num?)?.toDouble() ??
-                        kolam.data.tinggiAir,
-                    sensorType:
-                        data['sensorType'] as String? ?? kolam.data.sensorType,
-                    value:
-                        (data['value'] as num?)?.toDouble() ?? kolam.data.value,
+                    dissolvedOxygen: (data['do'] as num?)?.toDouble() ?? kolam.data.dissolvedOxygen,
+                    berat: (data['berat_pakan'] as num?)?.toDouble() ?? kolam.data.berat,
+                    tinggiAir: (data['level_air'] as num?)?.toDouble() ?? kolam.data.tinggiAir,
+                    sensorType: data['sensorType'] as String? ?? kolam.data.sensorType,
+                    value: (data['value'] as num?)?.toDouble() ?? kolam.data.value,
                   );
                   lastUpdateTimes[kolam.name] = DateTime.now();
                   kolam.updateSensorCards();
+                  _saveKolams(); // Simpan data saat dialog diperbarui
                 });
               }
             };
@@ -481,9 +475,7 @@ class DashboardPageState extends State<DashboardPage>
                     final sensorKey = kolam.sensorData.keys.elementAt(index);
                     final data = kolam.sensorData[sensorKey]!;
                     final statusKey = sensorKey;
-                    final status =
-                        kolam.data.getStatusMap(thresholds)[statusKey] ??
-                            SensorStatus.normal;
+                    final status = kolam.data.getStatusMap(thresholds)[statusKey] ?? SensorStatus.normal;
                     return Padding(
                       padding: const EdgeInsets.symmetric(vertical: 4.0),
                       child: SensorCard(
@@ -534,8 +526,7 @@ class DashboardPageState extends State<DashboardPage>
       duration: const Duration(milliseconds: 300),
     );
     setState(() {
-      historyNotifier.value = List.from(historyNotifier.value)
-        ..removeWhere((entry) => entry['kolamName'] == removedKolam.name);
+      historyNotifier.value = List.from(historyNotifier.value)..removeWhere((entry) => entry['kolamName'] == removedKolam.name);
       _saveKolams();
       _saveHistory();
     });
@@ -556,8 +547,7 @@ class DashboardPageState extends State<DashboardPage>
           leading: CircleAvatar(
             radius: 24,
             backgroundColor: Colors.cyan.shade100,
-            child: const FaIcon(FontAwesomeIcons.water,
-                color: Colors.cyan, size: 20),
+            child: const FaIcon(FontAwesomeIcons.water, color: Colors.cyan, size: 20),
           ),
           title: Text(
             kolam.name,
@@ -614,12 +604,10 @@ class DashboardPageState extends State<DashboardPage>
               Text('Nama Kolam: ${kolam.name}'),
               Text('ID: ${kolam.id}'),
               const SizedBox(height: 10),
-              ...kolam.sensorData.entries
-                  .map((entry) => Text('${entry.value.label}: ${entry.value.value}')),
+              ...kolam.sensorData.entries.map((entry) => Text('${entry.value.label}: ${entry.value.value}')),
               const SizedBox(height: 10),
               Text('Status: ${kolam.data.getStatusMap(thresholds).toString()}'),
-              Text(
-                  'Waktu Terakhir Update: ${lastUpdateTimes[kolam.name]?.toLocal() ?? DateTime.now().toLocal()}'),
+              Text('Waktu Terakhir Update: ${lastUpdateTimes[kolam.name]?.toLocal() ?? DateTime.now().toLocal()}'),
             ],
           ),
           actions: [
@@ -717,10 +705,9 @@ class DashboardPageState extends State<DashboardPage>
   // Membersihkan sumber daya
   @override
   void dispose() {
-    _saveKolamsTimer?.cancel();
-    _saveHistoryTimer?.cancel();
     mqttService.dispose();
     historyNotifier.dispose();
+    SettingsService.thresholdsNotifier.removeListener(_onThresholdsChanged);
     super.dispose();
   }
 
@@ -732,8 +719,7 @@ class DashboardPageState extends State<DashboardPage>
       initialData: mqttService.getConnectionStatus(),
       builder: (context, snapshot) {
         final connectionStatus = snapshot.data ?? MqttConnectionState.disconnected;
-        if (connectionStatus == MqttConnectionState.disconnected &&
-            mqttService.reconnectAttempts >= mqttService.maxReconnectAttempts) {
+        if (connectionStatus == MqttConnectionState.disconnected && mqttService.reconnectAttempts >= mqttService.maxReconnectAttempts) {
           WidgetsBinding.instance.addPostFrameCallback((_) {
             if (mounted) {
               ScaffoldMessenger.of(context).showSnackBar(
@@ -772,9 +758,7 @@ class DashboardPageState extends State<DashboardPage>
               BottomNavigationBarItem(
                 icon: Icon(
                   Icons.link,
-                  color: connectionStatus == MqttConnectionState.connected
-                      ? Colors.green
-                      : Colors.red,
+                  color: connectionStatus == MqttConnectionState.connected ? Colors.green : Colors.red,
                 ),
                 label: 'Koneksi',
               ),

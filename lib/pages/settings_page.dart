@@ -14,49 +14,56 @@ class SettingsPage extends StatefulWidget {
   final MqttService mqttService;
   final Function(Map<String, SensorThreshold>) onThresholdsChanged;
 
-  // Konstruktor dengan parameter wajib
   const SettingsPage({super.key, required this.mqttService, required this.onThresholdsChanged});
 
   @override
   SettingsPageState createState() => SettingsPageState();
 }
 
-// State untuk mengelola logika halaman pengaturan
 class SettingsPageState extends State<SettingsPage> {
   final Map<String, TextEditingController> controllers = {};
-  final List<String> sensorNames = ['suhu', 'ph', 'do', 'berat', 'tinggi_air'];
+  final List<String> sensorNames = ['suhu', 'ph', 'dissolvedOxygen', 'berat', 'tinggiAir'];
   Map<String, SensorThreshold> thresholds = {};
   File? _profileImage;
 
-  // Inisialisasi state
   @override
   void initState() {
     super.initState();
     _loadAllThresholds();
     _loadProfileImage();
+    SettingsService.thresholdsNotifier.addListener(_onThresholdsChanged);
   }
 
-  // Memuat ambang batas sensor dari penyimpanan
+  void _onThresholdsChanged() {
+    setState(() {
+      thresholds = SettingsService.thresholdsNotifier.value;
+      for (var sensor in sensorNames) {
+        final th = thresholds[sensor] ?? defaultThresholds[sensor]!;
+        controllers['$sensor-normalMin']?.text = th.normalMin.toStringAsFixed(2);
+        controllers['$sensor-normalMax']?.text = th.normalMax.toStringAsFixed(2);
+        controllers['$sensor-criticalMin']?.text = th.criticalMin.toStringAsFixed(2);
+        controllers['$sensor-criticalMax']?.text = th.criticalMax.toStringAsFixed(2);
+      }
+    });
+    widget.onThresholdsChanged(thresholds);
+  }
+
   Future<void> _loadAllThresholds() async {
     final savedThresholds = await SettingsService.getThresholds();
-    thresholds = savedThresholds;
-
-    for (var sensor in sensorNames) {
-      final saved = savedThresholds[sensor];
-      final th = saved ?? defaultThresholds[sensor]!;
-
-      controllers['$sensor-normalMin'] = TextEditingController(text: th.normalMin.toString());
-      controllers['$sensor-normalMax'] = TextEditingController(text: th.normalMax.toString());
-      controllers['$sensor-criticalMin'] = TextEditingController(text: th.criticalMin.toString());
-      controllers['$sensor-criticalMax'] = TextEditingController(text: th.criticalMax.toString());
-    }
-
-    if (mounted) {
-      setState(() {});
-    }
+    setState(() {
+      thresholds = Map.from(defaultThresholds);
+      thresholds.addAll(savedThresholds);
+      for (var sensor in sensorNames) {
+        final th = thresholds[sensor] ?? defaultThresholds[sensor]!;
+        controllers['$sensor-normalMin'] = TextEditingController(text: th.normalMin.toStringAsFixed(2));
+        controllers['$sensor-normalMax'] = TextEditingController(text: th.normalMax.toStringAsFixed(2));
+        controllers['$sensor-criticalMin'] = TextEditingController(text: th.criticalMin.toStringAsFixed(2));
+        controllers['$sensor-criticalMax'] = TextEditingController(text: th.criticalMax.toStringAsFixed(2));
+      }
+    });
+    widget.onThresholdsChanged(thresholds);
   }
 
-  // Memuat gambar profil dari penyimpanan
   Future<void> _loadProfileImage() async {
     final prefs = await SharedPreferences.getInstance();
     final imagePath = prefs.getString('profile_image_path');
@@ -69,19 +76,18 @@ class SettingsPageState extends State<SettingsPage> {
     }
   }
 
-  // Menyimpan ambang batas sensor
   Future<void> _saveThresholds() async {
     final newThresholds = <String, SensorThreshold>{};
     for (var sensor in sensorNames) {
-      final normalMin = double.tryParse(controllers['$sensor-normalMin']!.text) ?? 0.0;
-      final normalMax = double.tryParse(controllers['$sensor-normalMax']!.text) ?? 0.0;
-      final criticalMin = double.tryParse(controllers['$sensor-criticalMin']!.text) ?? 0.0;
-      final criticalMax = double.tryParse(controllers['$sensor-criticalMax']!.text) ?? 0.0;
+      final normalMin = double.tryParse(controllers['$sensor-normalMin']!.text) ?? defaultThresholds[sensor]!.normalMin;
+      final normalMax = double.tryParse(controllers['$sensor-normalMax']!.text) ?? defaultThresholds[sensor]!.normalMax;
+      final criticalMin = double.tryParse(controllers['$sensor-criticalMin']!.text) ?? defaultThresholds[sensor]!.criticalMin;
+      final criticalMax = double.tryParse(controllers['$sensor-criticalMax']!.text) ?? defaultThresholds[sensor]!.criticalMax;
 
       if (normalMin > normalMax) {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Normal Min untuk $sensor tidak boleh lebih besar dari Normal Max')),
+            SnackBar(content: Text('Normal Min untuk ${getSensorLabel(sensor)} tidak boleh lebih besar dari Normal Max')),
           );
         }
         return;
@@ -89,7 +95,7 @@ class SettingsPageState extends State<SettingsPage> {
       if (criticalMin > criticalMax) {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Critical Min untuk $sensor tidak boleh lebih besar dari Critical Max')),
+            SnackBar(content: Text('Critical Min untuk ${getSensorLabel(sensor)} tidak boleh lebih besar dari Critical Max')),
           );
         }
         return;
@@ -103,17 +109,31 @@ class SettingsPageState extends State<SettingsPage> {
       );
       newThresholds[sensor] = newThreshold;
     }
-    thresholds = newThresholds;
+
+    setState(() {
+      thresholds = newThresholds;
+    });
     await SettingsService.setThresholds(thresholds);
+    widget.onThresholdsChanged(thresholds);
     if (mounted) {
-      widget.onThresholdsChanged(thresholds);
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Ambang batas berhasil disimpan!')),
       );
     }
   }
 
-  // Memilih gambar profil dari galeri
+  String getSensorLabel(String sensor) {
+    return sensor == 'suhu'
+        ? 'Suhu'
+        : sensor == 'ph'
+            ? 'pH'
+            : sensor == 'dissolvedOxygen'
+                ? 'DO'
+                : sensor == 'berat'
+                    ? 'Berat Pakan'
+                    : 'Level Air';
+  }
+
   Future<void> _pickProfileImage() async {
     final picker = ImagePicker();
     final pickedFile = await picker.pickImage(source: ImageSource.gallery);
@@ -129,7 +149,6 @@ class SettingsPageState extends State<SettingsPage> {
     }
   }
 
-  // Membangun input untuk ambang batas sensor
   Widget _buildThresholdInput(String sensor) {
     return Card(
       elevation: 4,
@@ -141,7 +160,7 @@ class SettingsPageState extends State<SettingsPage> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              sensor.toUpperCase(),
+              getSensorLabel(sensor),
               style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
             ),
             const SizedBox(height: 8),
@@ -190,7 +209,6 @@ class SettingsPageState extends State<SettingsPage> {
     );
   }
 
-  // Membangun field input untuk sensor
   Widget _inputField({
     required String sensor,
     required String key,
@@ -207,7 +225,6 @@ class SettingsPageState extends State<SettingsPage> {
     );
   }
 
-  // Membangun profil tim
   Widget _buildProfile(String name, String role, String description, String imageAsset) {
     return ListTile(
       contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
@@ -226,7 +243,6 @@ class SettingsPageState extends State<SettingsPage> {
     );
   }
 
-  // Menampilkan dialog profil
   void _showProfileDialog(String name, String role, String description, String imageAsset) {
     showDialog(
       context: context,
@@ -261,7 +277,6 @@ class SettingsPageState extends State<SettingsPage> {
     );
   }
 
-  // Membangun UI halaman pengaturan
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -331,7 +346,6 @@ class SettingsPageState extends State<SettingsPage> {
     );
   }
 
-  // Membangun informasi aplikasi
   Widget _buildAppInfo() {
     return const Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -358,5 +372,12 @@ class SettingsPageState extends State<SettingsPage> {
         ),
       ],
     );
+  }
+
+  @override
+  void dispose() {
+    SettingsService.thresholdsNotifier.removeListener(_onThresholdsChanged);
+    controllers.forEach((key, controller) => controller.dispose());
+    super.dispose();
   }
 }

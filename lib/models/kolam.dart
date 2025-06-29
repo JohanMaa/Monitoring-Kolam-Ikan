@@ -34,11 +34,11 @@ class Kolam {
         value: '${data.ph.toStringAsFixed(1)}',
         color: getColorForStatus(statuses['ph'] ?? SensorStatus.normal),
       ),
-      'dissolved_oxygen': SensorCardData(
+      'dissolvedOxygen': SensorCardData(
         icon: const Icon(Icons.waves),
         label: 'DO',
         value: '${data.dissolvedOxygen.toStringAsFixed(1)} ',
-        color: getColorForStatus(statuses['dissolved_oxygen'] ?? SensorStatus.normal),
+        color: getColorForStatus(statuses['dissolvedOxygen'] ?? SensorStatus.normal),
       ),
       'berat': SensorCardData(
         icon: const Icon(Icons.fastfood),
@@ -46,11 +46,11 @@ class Kolam {
         value: '${data.berat.toStringAsFixed(1)} ',
         color: getColorForStatus(statuses['berat'] ?? SensorStatus.normal),
       ),
-      'tinggi_air': SensorCardData(
+      'tinggiAir': SensorCardData(
         icon: const Icon(Icons.water_drop),
         label: 'Level Air',
         value: '${data.tinggiAir.toStringAsFixed(1)} ',
-        color: getColorForStatus(statuses['tinggi_air'] ?? SensorStatus.normal),
+        color: getColorForStatus(statuses['tinggiAir'] ?? SensorStatus.normal),
       ),
     };
   }
@@ -97,7 +97,7 @@ class Kolam {
           criticalMin: 5.0,
           criticalMax: 9.0,
         ),
-        'do': SensorThreshold(
+        'dissolvedOxygen': SensorThreshold(
           normalMin: 5,
           normalMax: 8,
           criticalMin: 3,
@@ -109,7 +109,7 @@ class Kolam {
           criticalMin: -5,
           criticalMax: 10,
         ),
-        'tinggi_air': SensorThreshold(
+        'tinggiAir': SensorThreshold(
           normalMin: 10,
           normalMax: 50,
           criticalMin: 5,
