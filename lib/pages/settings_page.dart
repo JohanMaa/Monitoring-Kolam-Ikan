@@ -347,32 +347,58 @@ class SettingsPageState extends State<SettingsPage> {
   }
 
   Widget _buildAppInfo() {
-    return const Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        ListTile(
-          leading: Icon(Icons.info_outline),
-          title: Text("Nama Aplikasi"),
-          subtitle: Text("Monitoring Kolam Ikan"),
-        ),
-        ListTile(
-          leading: Icon(Icons.update),
-          title: Text("Versi"),
-          subtitle: Text("1.1.0"),
-        ),
-        ListTile(
-          leading: Icon(Icons.people),
-          title: Text("Tim Pengembang"),
-          subtitle: Text("Johan, Rifki, Rohmat"),
-        ),
-        ListTile(
-          leading: Icon(Icons.copyright),
-          title: Text("Hak Cipta"),
-          subtitle: Text("© 2025 MonitoringKolam Team"),
-        ),
-      ],
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const SizedBox(height: 8),
+          _infoRow(Icons.info_outline, "Nama Aplikasi", "Monitoring Kolam Ikan"),
+          _infoRow(Icons.update, "Versi", "1.1.2"),
+          _infoRow(Icons.people, "Tim Pengembang", "Johan, Rifki, Rohmat"),
+          _infoRow(Icons.copyright, "Hak Cipta", "© 2025 Monitoring Kolam Team"),
+          const SizedBox(height: 8),
+        ],
+      ),
     );
   }
+
+  Widget _infoRow(IconData icon, String title, String value) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 6),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(icon, size: 22, color: Colors.blueGrey.shade700),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  style: const TextStyle(
+                    fontWeight: FontWeight.w600,
+                    fontSize: 15,
+                    color: Colors.black87,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  value,
+                  style: const TextStyle(
+                    fontSize: 14,
+                    color: Colors.black54,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
 
   @override
   void dispose() {
